@@ -1,0 +1,178 @@
+{
+  "meta": {
+    "appName": "StoreBuddy",
+    "currency": "LKR",
+    "lastBackupAt": null,
+    "lastRestoredAt": null
+  },
+  "users": [
+    {
+      "id": "user-admin",
+      "name": "Admin User",
+      "username": "admin",
+      "role": "admin",
+      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "active": true
+    },
+    {
+      "id": "user-cashier",
+      "name": "Cashier One",
+      "username": "cashier",
+      "role": "cashier",
+      "passwordHash": "b4c94003c562bb0d89535eca77f07284fe560fd48a7cc1ed99f0a56263d616ba",
+      "active": true
+    },
+    {
+      "id": "user-stock",
+      "name": "Stock Handler",
+      "username": "stock",
+      "role": "stock_handler",
+      "passwordHash": "2865dd81e909d7ddaa85076b6187102140e01fe48fd203f1d7a73b0b515fbac5",
+      "active": true
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat-books",
+      "name": "Books",
+      "description": "School and office books"
+    },
+    {
+      "id": "cat-stationery",
+      "name": "Stationery",
+      "description": "Daily stationery items"
+    },
+    {
+      "id": "cat-mobile",
+      "name": "Mobile Accessories",
+      "description": "Phone accessories and chargers"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod-notebook-a5",
+      "name": "A5 Notebook",
+      "barcode": "890100000001",
+      "categoryId": "cat-books",
+      "sku": "BK-001",
+      "price": 180,
+      "costPrice": 120,
+      "stock": 42,
+      "reorderLevel": 12,
+      "unit": "pcs",
+      "description": "80-page ruled notebook"
+    },
+    {
+      "id": "prod-blue-pen",
+      "name": "Blue Ballpoint Pen",
+      "barcode": "890100000002",
+      "categoryId": "cat-stationery",
+      "sku": "ST-010",
+      "price": 60,
+      "costPrice": 32,
+      "stock": 9,
+      "reorderLevel": 15,
+      "unit": "pcs",
+      "description": "Smooth-writing pen"
+    },
+    {
+      "id": "prod-usb-cable",
+      "name": "USB-C Cable",
+      "barcode": "890100000003",
+      "categoryId": "cat-mobile",
+      "sku": "MB-204",
+      "price": 650,
+      "costPrice": 420,
+      "stock": 18,
+      "reorderLevel": 5,
+      "unit": "pcs",
+      "description": "1m charging cable"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "sup-1",
+      "name": "Metro Wholesale",
+      "contactPerson": "Ruwan",
+      "phone": "0771234567",
+      "email": "metro@example.com",
+      "address": "Kandy Road, Colombo"
+    },
+    {
+      "id": "sup-2",
+      "name": "Paper Line Distributors",
+      "contactPerson": "Nimali",
+      "phone": "0717654321",
+      "email": "paperline@example.com",
+      "address": "Main Street, Gampaha"
+    }
+  ],
+  "purchaseOrders": [
+    {
+      "id": "po-1001",
+      "supplierId": "sup-2",
+      "status": "pending",
+      "createdAt": "2026-05-02T09:30:00.000Z",
+      "receivedAt": null,
+      "notes": "Restock notebooks and pens",
+      "items": [
+        {
+          "productId": "prod-notebook-a5",
+          "quantity": 20,
+          "costPrice": 118
+        },
+        {
+          "productId": "prod-blue-pen",
+          "quantity": 40,
+          "costPrice": 30
+        }
+      ]
+    }
+  ],
+  "sales": [
+    {
+      "id": "sale-1001",
+      "cashierId": "user-cashier",
+      "createdAt": "2026-05-04T10:15:00.000Z",
+      "items": [
+        {
+          "productId": "prod-notebook-a5",
+          "quantity": 2,
+          "price": 180,
+          "name": "A5 Notebook"
+        },
+        {
+          "productId": "prod-blue-pen",
+          "quantity": 3,
+          "price": 60,
+          "name": "Blue Ballpoint Pen"
+        }
+      ],
+      "subtotal": 540,
+      "total": 540,
+      "paymentMethod": "cash"
+    },
+    {
+      "id": "sale-1002",
+      "cashierId": "user-cashier",
+      "createdAt": "2026-05-05T07:45:00.000Z",
+      "items": [
+        {
+          "productId": "prod-usb-cable",
+          "quantity": 1,
+          "price": 650,
+          "name": "USB-C Cable"
+        },
+        {
+          "productId": "prod-notebook-a5",
+          "quantity": 1,
+          "price": 180,
+          "name": "A5 Notebook"
+        }
+      ],
+      "subtotal": 830,
+      "total": 830,
+      "paymentMethod": "cash"
+    }
+  ]
+}
