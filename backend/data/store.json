@@ -1,7 +1,7 @@
 {
   "meta": {
-    "appName": "StoreBuddy",
     "currency": "LKR",
+    "appName": "StoreBuddy",
     "lastBackupAt": null,
     "lastRestoredAt": null
   },
@@ -50,14 +50,27 @@
   ],
   "products": [
     {
+      "id": "prod-sfbg5f3g",
+      "name": "redda",
+      "barcode": "123453135341351",
+      "sku": "afdasfda",
+      "categoryId": "cat-books",
+      "price": 10000,
+      "costPrice": 50000,
+      "stock": 5,
+      "reorderLevel": 2,
+      "unit": "pcs",
+      "description": "redi bn redi"
+    },
+    {
       "id": "prod-notebook-a5",
       "name": "A5 Notebook",
       "barcode": "890100000001",
       "categoryId": "cat-books",
       "sku": "BK-001",
       "price": 180,
-      "costPrice": 120,
-      "stock": 42,
+      "costPrice": 118,
+      "stock": 60,
       "reorderLevel": 12,
       "unit": "pcs",
       "description": "80-page ruled notebook"
@@ -69,8 +82,8 @@
       "categoryId": "cat-stationery",
       "sku": "ST-010",
       "price": 60,
-      "costPrice": 32,
-      "stock": 9,
+      "costPrice": 30,
+      "stock": 47,
       "reorderLevel": 15,
       "unit": "pcs",
       "description": "Smooth-writing pen"
@@ -83,7 +96,7 @@
       "sku": "MB-204",
       "price": 650,
       "costPrice": 420,
-      "stock": 18,
+      "stock": 17,
       "reorderLevel": 5,
       "unit": "pcs",
       "description": "1m charging cable"
@@ -109,11 +122,26 @@
   ],
   "purchaseOrders": [
     {
+      "id": "po-x7twyvv4",
+      "supplierId": "sup-1",
+      "status": "received",
+      "createdAt": "2026-05-05T09:02:28.540Z",
+      "receivedAt": "2026-05-05T09:02:36.604Z",
+      "notes": "",
+      "items": [
+        {
+          "productId": "prod-blue-pen",
+          "quantity": 6,
+          "costPrice": 0
+        }
+      ]
+    },
+    {
       "id": "po-1001",
       "supplierId": "sup-2",
-      "status": "pending",
+      "status": "received",
       "createdAt": "2026-05-02T09:30:00.000Z",
-      "receivedAt": null,
+      "receivedAt": "2026-05-05T09:02:09.831Z",
       "notes": "Restock notebooks and pens",
       "items": [
         {
@@ -130,6 +158,68 @@
     }
   ],
   "sales": [
+    {
+      "id": "sale-saicpsc6",
+      "cashierId": "user-admin",
+      "createdAt": "2026-05-05T13:10:55.260Z",
+      "items": [
+        {
+          "productId": "prod-sfbg5f3g",
+          "quantity": 2,
+          "price": 10000,
+          "name": "redda"
+        },
+        {
+          "productId": "prod-notebook-a5",
+          "quantity": 1,
+          "price": 180,
+          "name": "A5 Notebook"
+        },
+        {
+          "productId": "prod-blue-pen",
+          "quantity": 7,
+          "price": 60,
+          "name": "Blue Ballpoint Pen"
+        }
+      ],
+      "subtotal": 20600,
+      "total": 20600,
+      "paymentMethod": "cash"
+    },
+    {
+      "id": "sale-7wyl5q0w",
+      "cashierId": "user-admin",
+      "createdAt": "2026-05-05T09:03:20.435Z",
+      "items": [
+        {
+          "productId": "prod-sfbg5f3g",
+          "quantity": 1,
+          "price": 10000,
+          "name": "redda"
+        },
+        {
+          "productId": "prod-notebook-a5",
+          "quantity": 1,
+          "price": 180,
+          "name": "A5 Notebook"
+        },
+        {
+          "productId": "prod-blue-pen",
+          "quantity": 1,
+          "price": 60,
+          "name": "Blue Ballpoint Pen"
+        },
+        {
+          "productId": "prod-usb-cable",
+          "quantity": 1,
+          "price": 650,
+          "name": "USB-C Cable"
+        }
+      ],
+      "subtotal": 10890,
+      "total": 10890,
+      "paymentMethod": "cash"
+    },
     {
       "id": "sale-1001",
       "cashierId": "user-cashier",

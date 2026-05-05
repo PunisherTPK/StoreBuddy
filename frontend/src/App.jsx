@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const tabs = [
-  { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"] },
-  { id: "pos", label: "POS", roles: ["admin", "cashier"] },
-  { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"] },
-  { id: "suppliers", label: "Suppliers", roles: ["admin", "stock_handler"] },
-  { id: "orders", label: "Purchase Orders", roles: ["admin", "stock_handler"] },
-  { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"] },
-  { id: "users", label: "Users", roles: ["admin"] },
-  { id: "backup", label: "Backup", roles: ["admin"] }
+  { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
+  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon },
+  { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"], icon: BoxIcon },
+  { id: "suppliers", label: "Suppliers", roles: ["admin", "stock_handler"], icon: TruckIcon },
+  { id: "orders", label: "Purchase Orders", roles: ["admin", "stock_handler"], icon: ClipboardIcon },
+  { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"], icon: ChartIcon },
+  { id: "users", label: "Users", roles: ["admin"], icon: UsersIcon },
+  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon }
 ];
 
 const demoAccounts = [
-  { username: "admin", password: "admin123", role: "Admin" },
+  { username: "admin", password: "admin123", role: "Administrator" },
   { username: "cashier", password: "cashier123", role: "Cashier" },
   { username: "stock", password: "stock123", role: "Stock Handler" }
 ];
@@ -78,6 +78,14 @@ function emptyUser() {
   };
 }
 
+function emptyPurchaseOrder() {
+  return {
+    supplierId: "",
+    notes: "",
+    items: [{ productId: "", quantity: 1, costPrice: 0 }]
+  };
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("storebuddy-token") || "");
   const [user, setUser] = useState(null);
@@ -86,22 +94,58 @@ export default function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [busyKey, setBusyKey] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
   const [productForm, setProductForm] = useState(emptyProduct());
   const [supplierForm, setSupplierForm] = useState(emptySupplier());
   const [userForm, setUserForm] = useState(emptyUser());
-  const [purchaseOrderForm, setPurchaseOrderForm] = useState({
-    supplierId: "",
-    notes: "",
-    items: [{ productId: "", quantity: 1, costPrice: 0 }]
-  });
+  const [purchaseOrderForm, setPurchaseOrderForm] = useState(emptyPurchaseOrder());
   const [cart, setCart] = useState([]);
-  const [search, setSearch] = useState("");
   const [backupText, setBackupText] = useState("");
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState({
+    products: { key: "name", direction: "asc" },
+    sales: { key: "createdAt", direction: "desc" },
+    users: { key: "name", direction: "asc" }
+  });
+
+  const barcodeInputRef = useRef(null);
 
   const roleTabs = useMemo(
     () => tabs.filter((tab) => (user ? tab.roles.includes(user.role) : false)),
     [user]
   );
+
+  const currentTab = roleTabs.find((tab) => tab.id === activeTab) || roleTabs[0];
+
+  const filteredProducts = useMemo(() => {
+    const products = boot?.products || [];
+    const query = globalSearch.trim().toLowerCase();
+    if (!query) {
+      return products;
+    }
+
+    return products.filter((product) =>
+      [product.name, product.barcode, product.sku]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    );
+  }, [boot?.products, globalSearch]);
+
+  const sortedProducts = useMemo(() => {
+    return sortRows(filteredProducts, sortConfig.products);
+  }, [filteredProducts, sortConfig.products]);
+
+  const sortedUsers = useMemo(() => {
+    return sortRows(boot?.users || [], sortConfig.users);
+  }, [boot?.users, sortConfig.users]);
+
+  const recentSales = useMemo(() => {
+    return sortRows(boot?.sales || [], sortConfig.sales).slice(0, 8);
+  }, [boot?.sales, sortConfig.sales]);
 
   async function loadBootstrap(currentToken = token) {
     if (!currentToken) {
@@ -135,15 +179,34 @@ export default function App() {
     }
   }, [token]);
 
+  useEffect(() => {
+    if (activeTab === "pos" && barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, [activeTab, boot]);
+
   function flash(text) {
     setMessage(text);
-    window.setTimeout(() => setMessage(""), 2500);
+    window.setTimeout(() => setMessage(""), 2600);
+  }
+
+  async function runAction(key, action) {
+    setBusyKey(key);
+    setError("");
+    try {
+      await action();
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setBusyKey("");
+    }
   }
 
   async function handleLogin(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     setLoading(true);
+    setError("");
     try {
       const data = await api("/api/auth/login", {
         method: "POST",
@@ -171,902 +234,1386 @@ export default function App() {
 
   async function saveProduct(event) {
     event.preventDefault();
-    const path = productForm.id ? `/api/products/${productForm.id}` : "/api/products";
-    const method = productForm.id ? "PUT" : "POST";
-    const next = await api(
-      path,
-      {
-        method,
-        body: JSON.stringify(productForm)
-      },
-      token
-    );
-    setBoot((current) => ({ ...current, products: next, summary: summarizeLocal({ ...current, products: next }) }));
-    setProductForm(emptyProduct());
-    flash(productForm.id ? "Product updated." : "Product added.");
+    await runAction("save-product", async () => {
+      const path = productForm.id ? `/api/products/${productForm.id}` : "/api/products";
+      const method = productForm.id ? "PUT" : "POST";
+      const next = await api(
+        path,
+        {
+          method,
+          body: JSON.stringify(productForm)
+        },
+        token
+      );
+
+      setBoot((current) => {
+        const summary = summarizeLocal({ ...current, products: next }).summary;
+        return { ...current, products: next, summary };
+      });
+      setProductForm(emptyProduct());
+      setProductModalOpen(false);
+      flash(productForm.id ? "Product updated." : "Product added.");
+    });
   }
 
   async function saveSupplier(event) {
     event.preventDefault();
-    const path = supplierForm.id ? `/api/suppliers/${supplierForm.id}` : "/api/suppliers";
-    const method = supplierForm.id ? "PUT" : "POST";
-    const next = await api(
-      path,
-      {
-        method,
-        body: JSON.stringify(supplierForm)
-      },
-      token
-    );
-    setBoot((current) => ({ ...current, suppliers: next, summary: { ...current.summary, supplierCount: next.length } }));
-    setSupplierForm(emptySupplier());
-    flash(supplierForm.id ? "Supplier updated." : "Supplier added.");
+    await runAction("save-supplier", async () => {
+      const path = supplierForm.id ? `/api/suppliers/${supplierForm.id}` : "/api/suppliers";
+      const method = supplierForm.id ? "PUT" : "POST";
+      const next = await api(
+        path,
+        {
+          method,
+          body: JSON.stringify(supplierForm)
+        },
+        token
+      );
+
+      setBoot((current) => ({
+        ...current,
+        suppliers: next,
+        summary: {
+          ...current.summary,
+          supplierCount: next.length
+        }
+      }));
+      setSupplierForm(emptySupplier());
+      setSupplierModalOpen(false);
+      flash(supplierForm.id ? "Supplier updated." : "Supplier added.");
+    });
   }
 
   async function saveUser(event) {
     event.preventDefault();
-    const path = userForm.id ? `/api/users/${userForm.id}` : "/api/users";
-    const method = userForm.id ? "PUT" : "POST";
-    const next = await api(
-      path,
-      {
-        method,
-        body: JSON.stringify(userForm)
-      },
-      token
-    );
-    setBoot((current) => ({ ...current, users: next }));
-    setUserForm(emptyUser());
-    flash(userForm.id ? "User updated." : "User added.");
+    await runAction("save-user", async () => {
+      const path = userForm.id ? `/api/users/${userForm.id}` : "/api/users";
+      const method = userForm.id ? "PUT" : "POST";
+      const next = await api(
+        path,
+        {
+          method,
+          body: JSON.stringify(userForm)
+        },
+        token
+      );
+      setBoot((current) => ({ ...current, users: next }));
+      setUserForm(emptyUser());
+      setUserModalOpen(false);
+      flash(userForm.id ? "User updated." : "User added.");
+    });
   }
 
   async function addCategory(name) {
     if (!name.trim()) {
       return;
     }
-    const next = await api(
-      "/api/categories",
-      {
-        method: "POST",
-        body: JSON.stringify({ name: name.trim(), description: "" })
-      },
-      token
-    );
-    setBoot((current) => ({ ...current, categories: next }));
-    flash("Category added.");
+
+    await runAction("add-category", async () => {
+      const next = await api(
+        "/api/categories",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: name.trim(), description: "" })
+        },
+        token
+      );
+      setBoot((current) => ({ ...current, categories: next }));
+      flash("Category added.");
+    });
   }
 
   async function createSale() {
     if (!cart.length) {
       return;
     }
-    const response = await api(
-      "/api/sales",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          items: cart.map((item) => ({ productId: item.id, quantity: item.quantity })),
-          paymentMethod: "cash"
-        })
-      },
-      token
-    );
-    setBoot((current) => ({
-      ...current,
-      products: response.products,
-      sales: response.sales,
-      summary: response.summary
-    }));
-    setCart([]);
-    flash("Sale completed and stock updated.");
+
+    await runAction("create-sale", async () => {
+      const response = await api(
+        "/api/sales",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            items: cart.map((item) => ({ productId: item.id, quantity: item.quantity })),
+            paymentMethod: "cash"
+          })
+        },
+        token
+      );
+
+      setBoot((current) => ({
+        ...current,
+        products: response.products,
+        sales: response.sales,
+        summary: response.summary
+      }));
+      setCart([]);
+      flash("Sale completed and stock updated.");
+      window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
+    });
   }
 
   async function createPurchaseOrder(event) {
     event.preventDefault();
-    const next = await api(
-      "/api/purchase-orders",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          supplierId: purchaseOrderForm.supplierId,
-          notes: purchaseOrderForm.notes,
-          items: purchaseOrderForm.items.filter((item) => item.productId)
-        })
-      },
-      token
-    );
-    setBoot((current) => ({ ...current, purchaseOrders: next }));
-    setPurchaseOrderForm({
-      supplierId: "",
-      notes: "",
-      items: [{ productId: "", quantity: 1, costPrice: 0 }]
+    await runAction("create-order", async () => {
+      const next = await api(
+        "/api/purchase-orders",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            supplierId: purchaseOrderForm.supplierId,
+            notes: purchaseOrderForm.notes,
+            items: purchaseOrderForm.items.filter((item) => item.productId)
+          })
+        },
+        token
+      );
+
+      setBoot((current) => ({ ...current, purchaseOrders: next }));
+      setPurchaseOrderForm(emptyPurchaseOrder());
+      flash("Purchase order created.");
     });
-    flash("Purchase order created.");
   }
 
   async function receiveOrder(orderId) {
-    const response = await api(
-      `/api/purchase-orders/${orderId}/receive`,
-      {
-        method: "POST"
-      },
-      token
-    );
-    setBoot((current) => ({
-      ...current,
-      purchaseOrders: response.purchaseOrders,
-      products: response.products,
-      summary: summarizeLocal({ ...current, purchaseOrders: response.purchaseOrders, products: response.products })
-    }));
-    flash("Purchase order received and stock updated.");
+    await runAction(`receive-${orderId}`, async () => {
+      const response = await api(
+        `/api/purchase-orders/${orderId}/receive`,
+        {
+          method: "POST"
+        },
+        token
+      );
+
+      setBoot((current) => {
+        const summary = summarizeLocal({
+          ...current,
+          purchaseOrders: response.purchaseOrders,
+          products: response.products
+        }).summary;
+
+        return {
+          ...current,
+          purchaseOrders: response.purchaseOrders,
+          products: response.products,
+          summary
+        };
+      });
+      flash("Purchase order received and stock updated.");
+    });
   }
 
   async function exportBackup() {
-    const dump = await api("/api/backup/export", {}, token);
-    setBackupText(JSON.stringify(dump, null, 2));
-    flash("Backup exported to the panel.");
+    await runAction("export-backup", async () => {
+      const dump = await api("/api/backup/export", {}, token);
+      setBackupText(JSON.stringify(dump, null, 2));
+      flash("Backup exported.");
+    });
   }
 
   async function restoreBackup() {
-    const payload = JSON.parse(backupText);
-    await api(
-      "/api/backup/restore",
-      {
-        method: "POST",
-        body: JSON.stringify(payload)
-      },
-      token
-    );
-    await loadBootstrap(token);
-    flash("Backup restored.");
+    await runAction("restore-backup", async () => {
+      const payload = JSON.parse(backupText);
+      await api(
+        "/api/backup/restore",
+        {
+          method: "POST",
+          body: JSON.stringify(payload)
+        },
+        token
+      );
+      await loadBootstrap(token);
+      flash("Backup restored.");
+    });
   }
 
-  const filteredProducts = (boot?.products || []).filter((product) => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) {
-      return true;
-    }
-    return [product.name, product.barcode, product.sku].some((value) =>
-      String(value || "")
-        .toLowerCase()
-        .includes(needle)
-    );
-  });
+  function openNewProductModal() {
+    setProductForm(emptyProduct());
+    setProductModalOpen(true);
+  }
+
+  function openEditProductModal(product) {
+    setProductForm(product);
+    setProductModalOpen(true);
+  }
+
+  function openNewSupplierModal() {
+    setSupplierForm(emptySupplier());
+    setSupplierModalOpen(true);
+  }
+
+  function openEditSupplierModal(supplier) {
+    setSupplierForm(supplier);
+    setSupplierModalOpen(true);
+  }
+
+  function openNewUserModal() {
+    setUserForm(emptyUser());
+    setUserModalOpen(true);
+  }
+
+  function openEditUserModal(entry) {
+    setUserForm({ ...entry, password: "" });
+    setUserModalOpen(true);
+  }
+
+  function onSort(tableKey, key) {
+    setSortConfig((current) => {
+      const active = current[tableKey];
+      const direction = active?.key === key && active?.direction === "asc" ? "desc" : "asc";
+      return { ...current, [tableKey]: { key, direction } };
+    });
+  }
 
   if (!token || !user || !boot) {
     return (
-      <div className="login-shell">
-        <div className="hero-card">
-          <div>
-            <p className="eyebrow">StoreBuddy</p>
-            <h1>Inventory tracking and billing for a real small-shop workflow.</h1>
-            <p className="lede">
-              Built from the interim report as a local-first retail system with products, stock, billing,
-              suppliers, purchase orders, reporting, and role-based access.
-            </p>
-          </div>
-          <div className="demo-accounts">
-            <h2>Demo Accounts</h2>
-            {demoAccounts.map((account) => (
-              <div key={account.username} className="demo-account">
-                <strong>{account.role}</strong>
-                <span>{account.username}</span>
-                <span>{account.password}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <form className="panel login-panel" onSubmit={handleLogin}>
-          <h2>Sign in</h2>
-          <label>
-            Username
-            <input name="username" defaultValue="admin" required />
-          </label>
-          <label>
-            Password
-            <input name="password" type="password" defaultValue="admin123" required />
-          </label>
-          {error ? <p className="feedback error">{error}</p> : null}
-          <button className="primary-button" disabled={loading} type="submit">
-            {loading ? "Signing in..." : "Enter StoreBuddy"}
-          </button>
-        </form>
-      </div>
+      <LoginScreen
+        demoAccounts={demoAccounts}
+        error={error}
+        loading={loading}
+        onSubmit={handleLogin}
+      />
     );
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div>
-          <p className="eyebrow">Retail Control Panel</p>
-          <h1>StoreBuddy</h1>
-          <p className="user-tag">
-            {user.name} · {user.role.replace("_", " ")}
-          </p>
-        </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="flex min-h-screen">
+        <Sidebar
+          activeTab={activeTab}
+          onClose={() => setSidebarOpen(false)}
+          onSelect={(tabId) => {
+            setActiveTab(tabId);
+            setSidebarOpen(false);
+          }}
+          open={sidebarOpen}
+          tabs={roleTabs}
+          user={user}
+        />
 
-        <nav className="nav-list">
-          {roleTabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={tab.id === activeTab ? "nav-item active" : "nav-item"}
-              onClick={() => setActiveTab(tab.id)}
-              type="button"
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        <div className="min-w-0 flex-1">
+          <TopBar
+            activeTab={currentTab}
+            error={error}
+            message={message}
+            onLogout={logout}
+            onMenu={() => setSidebarOpen(true)}
+            onSearch={setGlobalSearch}
+            searchValue={globalSearch}
+            user={user}
+          />
 
-        <button className="ghost-button" onClick={logout} type="button">
-          Sign out
-        </button>
-      </aside>
+          <main className="space-y-6 px-4 pb-8 pt-4 sm:px-6 lg:px-8">
+            {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
 
-      <main className="main-content">
-        <header className="topbar">
-          <div>
-            <h2>{roleTabs.find((tab) => tab.id === activeTab)?.label}</h2>
-            <p>Local-first operations, real-time stock updates, and role-aware workflows.</p>
-          </div>
-          <div className="topbar-meta">
-            {message ? <span className="feedback success">{message}</span> : null}
-            {error ? <span className="feedback error">{error}</span> : null}
-          </div>
-        </header>
+            {activeTab === "dashboard" ? (
+              <DashboardScreen summary={boot.summary} products={boot.products} sales={recentSales} />
+            ) : null}
 
-        {activeTab === "dashboard" ? (
-          <Dashboard summary={boot.summary} products={boot.products} sales={boot.sales} />
-        ) : null}
-
-        {activeTab === "inventory" ? (
-          <section className="content-grid">
-            <div className="panel">
-              <h3>Products</h3>
-              <form className="form-grid" onSubmit={saveProduct}>
-                <label>
-                  Product name
-                  <input
-                    value={productForm.name}
-                    onChange={(event) => setProductForm({ ...productForm, name: event.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  Barcode
-                  <input
-                    value={productForm.barcode}
-                    onChange={(event) => setProductForm({ ...productForm, barcode: event.target.value })}
-                  />
-                </label>
-                <label>
-                  SKU
-                  <input
-                    value={productForm.sku}
-                    onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Category
-                  <select
-                    value={productForm.categoryId}
-                    onChange={(event) => setProductForm({ ...productForm, categoryId: event.target.value })}
-                  >
-                    <option value="">Select category</option>
-                    {boot.categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Sell price
-                  <input
-                    type="number"
-                    min="0"
-                    value={productForm.price}
-                    onChange={(event) => setProductForm({ ...productForm, price: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Cost price
-                  <input
-                    type="number"
-                    min="0"
-                    value={productForm.costPrice}
-                    onChange={(event) => setProductForm({ ...productForm, costPrice: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Stock
-                  <input
-                    type="number"
-                    min="0"
-                    value={productForm.stock}
-                    onChange={(event) => setProductForm({ ...productForm, stock: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Reorder level
-                  <input
-                    type="number"
-                    min="0"
-                    value={productForm.reorderLevel}
-                    onChange={(event) => setProductForm({ ...productForm, reorderLevel: event.target.value })}
-                  />
-                </label>
-                <label className="full-span">
-                  Description
-                  <textarea
-                    rows="3"
-                    value={productForm.description}
-                    onChange={(event) => setProductForm({ ...productForm, description: event.target.value })}
-                  />
-                </label>
-                <div className="button-row full-span">
-                  <button className="primary-button" type="submit">
-                    {productForm.id ? "Update product" : "Add product"}
-                  </button>
-                  <button className="ghost-button" onClick={() => setProductForm(emptyProduct())} type="button">
-                    Clear
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div className="panel">
-              <div className="row-between">
-                <h3>Categories</h3>
-                <InlineAdd onSubmit={addCategory} placeholder="New category name" />
-              </div>
-              <div className="pill-grid">
-                {boot.categories.map((category) => (
-                  <span key={category.id} className="pill">
-                    {category.name}
-                  </span>
-                ))}
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Barcode</th>
-                      <th>Price</th>
-                      <th>Stock</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {boot.products.map((product) => (
-                      <tr key={product.id} onClick={() => setProductForm(product)}>
-                        <td>{product.name}</td>
-                        <td>{product.barcode || "—"}</td>
-                        <td>{currency(product.price)}</td>
-                        <td>{product.stock}</td>
-                        <td>
-                          <span
-                            className={
-                              Number(product.stock) <= Number(product.reorderLevel) ? "status low" : "status good"
-                            }
-                          >
-                            {Number(product.stock) <= Number(product.reorderLevel) ? "Low stock" : "Healthy"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "suppliers" ? (
-          <section className="content-grid two-columns">
-            <div className="panel">
-              <h3>Supplier details</h3>
-              <form className="form-grid" onSubmit={saveSupplier}>
-                <label>
-                  Name
-                  <input
-                    value={supplierForm.name}
-                    onChange={(event) => setSupplierForm({ ...supplierForm, name: event.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  Contact person
-                  <input
-                    value={supplierForm.contactPerson}
-                    onChange={(event) => setSupplierForm({ ...supplierForm, contactPerson: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Phone
-                  <input
-                    value={supplierForm.phone}
-                    onChange={(event) => setSupplierForm({ ...supplierForm, phone: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    value={supplierForm.email}
-                    onChange={(event) => setSupplierForm({ ...supplierForm, email: event.target.value })}
-                  />
-                </label>
-                <label className="full-span">
-                  Address
-                  <textarea
-                    rows="3"
-                    value={supplierForm.address}
-                    onChange={(event) => setSupplierForm({ ...supplierForm, address: event.target.value })}
-                  />
-                </label>
-                <div className="button-row full-span">
-                  <button className="primary-button" type="submit">
-                    {supplierForm.id ? "Update supplier" : "Add supplier"}
-                  </button>
-                  <button className="ghost-button" onClick={() => setSupplierForm(emptySupplier())} type="button">
-                    Clear
-                  </button>
-                </div>
-              </form>
-            </div>
-            <div className="panel">
-              <h3>Supplier directory</h3>
-              <div className="stack-list">
-                {boot.suppliers.map((supplier) => (
-                  <button
-                    key={supplier.id}
-                    className="stack-card"
-                    onClick={() => setSupplierForm(supplier)}
-                    type="button"
-                  >
-                    <strong>{supplier.name}</strong>
-                    <span>{supplier.contactPerson || "No contact person"}</span>
-                    <span>{supplier.phone || "No phone number"}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "orders" ? (
-          <section className="content-grid">
-            <div className="panel">
-              <h3>Create purchase order</h3>
-              <form className="form-grid" onSubmit={createPurchaseOrder}>
-                <label>
-                  Supplier
-                  <select
-                    value={purchaseOrderForm.supplierId}
-                    onChange={(event) =>
-                      setPurchaseOrderForm({ ...purchaseOrderForm, supplierId: event.target.value })
-                    }
-                    required
-                  >
-                    <option value="">Select supplier</option>
-                    {boot.suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="full-span">
-                  Notes
-                  <textarea
-                    rows="3"
-                    value={purchaseOrderForm.notes}
-                    onChange={(event) => setPurchaseOrderForm({ ...purchaseOrderForm, notes: event.target.value })}
-                  />
-                </label>
-                <div className="full-span stack-list compact">
-                  {purchaseOrderForm.items.map((item, index) => (
-                    <div className="inline-form" key={`po-item-${index}`}>
-                      <select
-                        value={item.productId}
-                        onChange={(event) => updatePurchaseOrderItem(setPurchaseOrderForm, purchaseOrderForm, index, "productId", event.target.value)}
-                      >
-                        <option value="">Select product</option>
-                        {boot.products.map((product) => (
-                          <option key={product.id} value={product.id}>
-                            {product.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(event) => updatePurchaseOrderItem(setPurchaseOrderForm, purchaseOrderForm, index, "quantity", event.target.value)}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.costPrice}
-                        onChange={(event) => updatePurchaseOrderItem(setPurchaseOrderForm, purchaseOrderForm, index, "costPrice", event.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="button-row full-span">
-                  <button
-                    className="ghost-button"
-                    onClick={() =>
-                      setPurchaseOrderForm({
-                        ...purchaseOrderForm,
-                        items: [...purchaseOrderForm.items, { productId: "", quantity: 1, costPrice: 0 }]
-                      })
-                    }
-                    type="button"
-                  >
-                    Add item row
-                  </button>
-                  <button className="primary-button" type="submit">
-                    Create order
-                  </button>
-                </div>
-              </form>
-            </div>
-            <div className="panel">
-              <h3>Order tracking</h3>
-              <div className="stack-list">
-                {boot.purchaseOrders.map((order) => {
-                  const supplier = boot.suppliers.find((entry) => entry.id === order.supplierId);
-                  return (
-                    <div className="stack-card display-card" key={order.id}>
-                      <div className="row-between">
-                        <strong>{order.id}</strong>
-                        <span className={order.status === "pending" ? "status low" : "status good"}>{order.status}</span>
-                      </div>
-                      <span>{supplier?.name || "Unknown supplier"}</span>
-                      <span>{order.items.length} line items</span>
-                      {order.status === "pending" ? (
-                        <button className="primary-button small" onClick={() => receiveOrder(order.id)} type="button">
-                          Mark received
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "pos" ? (
-          <section className="content-grid">
-            <div className="panel">
-              <div className="row-between">
-                <h3>Point of sale</h3>
-                <input
-                  className="search-input"
-                  placeholder="Search by name, barcode, or SKU"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <div className="product-grid">
-                {filteredProducts.map((product) => (
-                  <button
-                    className="product-card"
-                    key={product.id}
-                    onClick={() => addToCart(cart, setCart, product)}
-                    type="button"
-                  >
-                    <strong>{product.name}</strong>
-                    <span>{product.barcode || product.sku || "No code"}</span>
-                    <span>{currency(product.price)}</span>
-                    <span>{product.stock} in stock</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="panel">
-              <h3>Current bill</h3>
-              <div className="stack-list compact">
-                {cart.length ? (
-                  cart.map((item) => (
-                    <div className="stack-card" key={item.id}>
-                      <div className="row-between">
-                        <strong>{item.name}</strong>
-                        <span>{currency(item.quantity * item.price)}</span>
-                      </div>
-                      <div className="inline-form">
-                        <button className="ghost-button small" onClick={() => shiftCart(setCart, item.id, -1)} type="button">
-                          -
-                        </button>
-                        <input readOnly value={item.quantity} />
-                        <button className="ghost-button small" onClick={() => shiftCart(setCart, item.id, 1)} type="button">
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="muted">Add products to build the current customer bill.</p>
-                )}
-              </div>
-              <div className="bill-box">
-                <div className="row-between">
-                  <span>Total</span>
-                  <strong>{currency(cart.reduce((sum, item) => sum + item.quantity * item.price, 0))}</strong>
-                </div>
-                <button className="primary-button" disabled={!cart.length} onClick={createSale} type="button">
-                  Complete sale
-                </button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "reports" ? (
-          <Reports boot={boot} />
-        ) : null}
-
-        {activeTab === "users" ? (
-          <section className="content-grid two-columns">
-            <div className="panel">
-              <h3>User management</h3>
-              <form className="form-grid" onSubmit={saveUser}>
-                <label>
-                  Full name
-                  <input
-                    value={userForm.name}
-                    onChange={(event) => setUserForm({ ...userForm, name: event.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  Username
-                  <input
-                    value={userForm.username}
-                    onChange={(event) => setUserForm({ ...userForm, username: event.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  Role
-                  <select
-                    value={userForm.role}
-                    onChange={(event) => setUserForm({ ...userForm, role: event.target.value })}
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="cashier">Cashier</option>
-                    <option value="stock_handler">Stock Handler</option>
-                  </select>
-                </label>
-                <label>
-                  Password
-                  <input
-                    value={userForm.password}
-                    onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
-                    placeholder={userForm.id ? "Leave blank to keep current password" : ""}
-                  />
-                </label>
-                <div className="button-row full-span">
-                  <button className="primary-button" type="submit">
-                    {userForm.id ? "Update user" : "Add user"}
-                  </button>
-                  <button className="ghost-button" onClick={() => setUserForm(emptyUser())} type="button">
-                    Clear
-                  </button>
-                </div>
-              </form>
-            </div>
-            <div className="panel">
-              <h3>Current users</h3>
-              <div className="stack-list">
-                {boot.users.map((entry) => (
-                  <button key={entry.id} className="stack-card" onClick={() => setUserForm({ ...entry, password: "" })} type="button">
-                    <strong>{entry.name}</strong>
-                    <span>{entry.username}</span>
-                    <span>{entry.role.replace("_", " ")}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "backup" ? (
-          <section className="content-grid two-columns">
-            <div className="panel">
-              <h3>Backup and restore</h3>
-              <p className="muted">
-                This MVP exports the full system dataset as JSON so the store can perform manual backups and restore them later.
-              </p>
-              <div className="button-row">
-                <button className="primary-button" onClick={exportBackup} type="button">
-                  Export backup
-                </button>
-                <button className="ghost-button" onClick={restoreBackup} type="button">
-                  Restore from panel
-                </button>
-              </div>
-            </div>
-            <div className="panel">
-              <h3>Backup payload</h3>
-              <textarea
-                className="backup-box"
-                rows="18"
-                value={backupText}
-                onChange={(event) => setBackupText(event.target.value)}
+            {activeTab === "inventory" ? (
+              <InventoryScreen
+                busy={busyKey}
+                categories={boot.categories}
+                onAddCategory={addCategory}
+                onEditProduct={openEditProductModal}
+                onNewProduct={openNewProductModal}
+                onSort={onSort}
+                products={sortedProducts}
+                sortConfig={sortConfig.products}
               />
-            </div>
-          </section>
-        ) : null}
-      </main>
+            ) : null}
+
+            {activeTab === "suppliers" ? (
+              <SuppliersScreen
+                onEditSupplier={openEditSupplierModal}
+                onNewSupplier={openNewSupplierModal}
+                suppliers={boot.suppliers}
+              />
+            ) : null}
+
+            {activeTab === "orders" ? (
+              <OrdersScreen
+                busyKey={busyKey}
+                form={purchaseOrderForm}
+                onChange={setPurchaseOrderForm}
+                onReceiveOrder={receiveOrder}
+                onSubmit={createPurchaseOrder}
+                products={boot.products}
+                purchaseOrders={boot.purchaseOrders}
+                suppliers={boot.suppliers}
+              />
+            ) : null}
+
+            {activeTab === "pos" ? (
+              <PosScreen
+                barcodeInputRef={barcodeInputRef}
+                busyKey={busyKey}
+                cart={cart}
+                onAddToCart={(product) => addToCart(cart, setCart, product)}
+                onCheckout={createSale}
+                onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                products={filteredProducts}
+                searchValue={globalSearch}
+                setSearchValue={setGlobalSearch}
+              />
+            ) : null}
+
+            {activeTab === "reports" ? <ReportsScreen boot={boot} /> : null}
+
+            {activeTab === "users" ? (
+              <UsersScreen
+                onEditUser={openEditUserModal}
+                onNewUser={openNewUserModal}
+                onSort={onSort}
+                sortConfig={sortConfig.users}
+                users={sortedUsers}
+              />
+            ) : null}
+
+            {activeTab === "backup" ? (
+              <BackupScreen
+                backupText={backupText}
+                busyKey={busyKey}
+                onBackupTextChange={setBackupText}
+                onExport={exportBackup}
+                onRestore={restoreBackup}
+              />
+            ) : null}
+          </main>
+        </div>
+      </div>
+
+      <EntityModal
+        open={productModalOpen}
+        title={productForm.id ? "Edit Product" : "Add Product"}
+        subtitle="Maintain clean inventory data with faster product entry."
+        onClose={() => setProductModalOpen(false)}
+      >
+        <ProductForm
+          busy={busyKey === "save-product"}
+          categories={boot.categories}
+          form={productForm}
+          onChange={setProductForm}
+          onSubmit={saveProduct}
+        />
+      </EntityModal>
+
+      <EntityModal
+        open={supplierModalOpen}
+        title={supplierForm.id ? "Edit Supplier" : "Add Supplier"}
+        subtitle="Keep supplier records tidy and ready for replenishment workflows."
+        onClose={() => setSupplierModalOpen(false)}
+      >
+        <SupplierForm
+          busy={busyKey === "save-supplier"}
+          form={supplierForm}
+          onChange={setSupplierForm}
+          onSubmit={saveSupplier}
+        />
+      </EntityModal>
+
+      <EntityModal
+        open={userModalOpen}
+        title={userForm.id ? "Edit User" : "Add User"}
+        subtitle="Assign roles without changing your existing permission logic."
+        onClose={() => setUserModalOpen(false)}
+      >
+        <UserForm
+          busy={busyKey === "save-user"}
+          form={userForm}
+          onChange={setUserForm}
+          onSubmit={saveUser}
+        />
+      </EntityModal>
     </div>
   );
 }
 
-function Dashboard({ summary, products, sales }) {
+function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
+  return (
+    <div className="grid min-h-screen lg:grid-cols-[1.2fr_460px]">
+      <div className="relative hidden overflow-hidden bg-slate-950 px-10 py-12 text-white lg:block">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.35),transparent_25%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.28),transparent_30%)]" />
+        <div className="relative flex h-full flex-col justify-between">
+          <div className="space-y-6">
+            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">
+              StoreBuddy
+            </span>
+            <div className="max-w-2xl space-y-4">
+              <h1 className="text-5xl font-semibold leading-tight tracking-tight">
+                A retail dashboard that feels fast, clear, and ready for the counter.
+              </h1>
+              <p className="max-w-xl text-lg text-slate-300">
+                Inventory, POS, suppliers, purchase orders, reporting, and backup workflows in one local-first workspace.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {demoAccounts.map((account) => (
+              <div key={account.username} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <p className="text-sm font-semibold text-white">{account.role}</p>
+                <p className="mt-3 text-sm text-slate-300">{account.username}</p>
+                <p className="text-sm text-blue-200">{account.password}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
+        <form className="card w-full max-w-md space-y-6 p-8" onSubmit={onSubmit}>
+          <div className="space-y-2">
+            <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">
+              Sign in
+            </span>
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Welcome back</h2>
+            <p className="text-sm text-slate-500">Use one of the seeded accounts to enter the dashboard.</p>
+          </div>
+
+          <div className="space-y-4">
+            <Field label="Username">
+              <input className="input" defaultValue="admin" name="username" required />
+            </Field>
+            <Field label="Password">
+              <input className="input" defaultValue="admin123" name="password" required type="password" />
+            </Field>
+          </div>
+
+          {error ? <Alert tone="error">{error}</Alert> : null}
+
+          <button className="btn-primary w-full" disabled={loading} type="submit">
+            {loading ? "Signing in..." : "Enter dashboard"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ activeTab, onClose, onSelect, open, tabs, user }) {
+  return (
+    <>
+      <div
+        className={`fixed inset-0 z-30 bg-slate-950/40 transition lg:hidden ${open ? "block" : "hidden"}`}
+        onClick={onClose}
+      />
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-slate-200 bg-white p-5 transition duration-200 lg:static lg:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-full flex-col">
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+                  <StoreIcon />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">StoreBuddy</p>
+                  <h1 className="text-lg font-semibold text-slate-900">Retail OS</h1>
+                </div>
+              </div>
+              <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                <p className="text-sm capitalize text-slate-500">{user.role.replace("_", " ")}</p>
+              </div>
+            </div>
+            <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onClose} type="button">
+              <CloseIcon />
+            </button>
+          </div>
+
+          <nav className="space-y-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+                    active
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                  onClick={() => onSelect(tab.id)}
+                  type="button"
+                >
+                  <Icon />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-900">Local-first workflow</p>
+            <p className="mt-1 text-sm text-slate-500">Built for fast billing, quick stock checks, and clean daily operations.</p>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function TopBar({ activeTab, error, message, onLogout, onMenu, onSearch, searchValue, user }) {
+  return (
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center gap-3">
+          <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onMenu} type="button">
+            <MenuIcon />
+          </button>
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{activeTab?.label}</h2>
+            <p className="text-sm text-slate-500">Production-style retail workspace with unchanged business logic underneath.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative min-w-0 md:w-80">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <SearchIcon />
+            </span>
+            <input
+              className="input pl-10"
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder="Search products, barcode, or SKU"
+              value={searchValue}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            {message ? <Alert tone="success">{message}</Alert> : null}
+            {error ? <Alert tone="error">{error}</Alert> : null}
+            <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:block">
+              <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+              <p className="text-xs capitalize text-slate-500">{user.role.replace("_", " ")}</p>
+            </div>
+            <button className="btn-secondary" onClick={onLogout} type="button">
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function DashboardScreen({ products, sales, summary }) {
   const cards = [
-    { label: "Today revenue", value: currency(summary.todayRevenue) },
-    { label: "Today sales", value: summary.todaySalesCount },
-    { label: "Products", value: summary.productCount },
-    { label: "Stock value", value: currency(summary.stockValue) }
+    { label: "Today's revenue", value: currency(summary.todayRevenue), accent: "text-blue-600" },
+    { label: "Sales today", value: summary.todaySalesCount, accent: "text-slate-900" },
+    { label: "Products", value: summary.productCount, accent: "text-slate-900" },
+    { label: "Stock value", value: currency(summary.stockValue), accent: "text-emerald-600" }
   ];
 
   return (
-    <section className="content-grid">
-      <div className="stats-grid">
+    <section className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <div className="stat-card" key={card.label}>
-            <span>{card.label}</span>
-            <strong>{card.value}</strong>
+          <div className="card p-5" key={card.label}>
+            <p className="text-sm text-slate-500">{card.label}</p>
+            <p className={`mt-3 text-3xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="panel">
-        <div className="row-between">
-          <h3>Low stock alerts</h3>
-          <span className="status low">{summary.lowStockCount} attention needed</span>
-        </div>
-        <div className="stack-list compact">
-          {summary.lowStockItems.map((product) => (
-            <div className="stack-card display-card" key={product.id}>
-              <strong>{product.name}</strong>
-              <span>
-                {product.stock} left · reorder at {product.reorderLevel}
-              </span>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <SectionCard title="Low stock alerts" subtitle="Products that need replenishment soon.">
+          {summary.lowStockItems.length ? (
+            <div className="space-y-3">
+              {summary.lowStockItems.map((product) => (
+                <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3" key={product.id}>
+                  <div>
+                    <p className="font-medium text-slate-900">{product.name}</p>
+                    <p className="text-sm text-slate-500">Reorder at {product.reorderLevel}</p>
+                  </div>
+                  <StatusPill tone="warning">{product.stock} left</StatusPill>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          ) : (
+            <EmptyState
+              description="All tracked products are above their reorder levels."
+              title="No urgent stock alerts"
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Recent sales" subtitle="Most recent completed transactions.">
+          <DataTable
+            columns={[
+              { key: "id", label: "Sale" },
+              { key: "items", label: "Items", render: (row) => row.items.reduce((sum, item) => sum + item.quantity, 0) },
+              { key: "total", label: "Total", render: (row) => currency(row.total) },
+              { key: "createdAt", label: "Time", render: (row) => formatDateTime(row.createdAt) }
+            ]}
+            rows={sales}
+          />
+        </SectionCard>
       </div>
 
-      <div className="panel">
-        <h3>Recent sales</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Sale</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.slice(0, 5).map((sale) => (
-                <tr key={sale.id}>
-                  <td>{sale.id}</td>
-                  <td>{sale.items.reduce((sum, item) => sum + item.quantity, 0)}</td>
-                  <td>{currency(sale.total)}</td>
-                  <td>{new Date(sale.createdAt).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="panel">
-        <h3>Current inventory snapshot</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Stock</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.id}>
-                  <td>{product.name}</td>
-                  <td>{product.stock}</td>
-                  <td>{currency(Number(product.stock) * Number(product.costPrice))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SectionCard title="Inventory snapshot" subtitle="Readable overview of current stock and current stock value.">
+        <DataTable
+          columns={[
+            { key: "name", label: "Product" },
+            { key: "stock", label: "Stock" },
+            {
+              key: "value",
+              label: "Value",
+              render: (row) => currency(Number(row.stock) * Number(row.costPrice || 0))
+            }
+          ]}
+          rows={products}
+        />
+      </SectionCard>
     </section>
   );
 }
 
-function Reports({ boot }) {
-  const movement = summarizeLocal(boot);
+function InventoryScreen({ busy, categories, onAddCategory, onEditProduct, onNewProduct, onSort, products, sortConfig }) {
   return (
-    <section className="content-grid">
-      <div className="panel">
-        <h3>Fast-moving items</h3>
-        <div className="stack-list compact">
-          {movement.summary.fastMoving.map((item) => (
-            <div className="stack-card display-card" key={item.id}>
-              <strong>{item.name}</strong>
-              <span>{item.sold} units sold</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="panel">
-        <h3>Slow-moving items</h3>
-        <div className="stack-list compact">
-          {movement.summary.slowMoving.map((item) => (
-            <div className="stack-card display-card" key={item.id}>
-              <strong>{item.name}</strong>
-              <span>{item.sold} units sold</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="panel">
-        <h3>Sales summary</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Transactions</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(groupSalesByDay(boot.sales)).map(([date, value]) => (
-                <tr key={date}>
-                  <td>{date}</td>
-                  <td>{value.count}</td>
-                  <td>{currency(value.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <section className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
+        <SectionCard
+          action={
+            <button className="btn-primary" onClick={onNewProduct} type="button">
+              Add product
+            </button>
+          }
+          subtitle="Clean table layout with faster scanning and easier editing."
+          title="Products"
+        >
+          <DataTable
+            columns={[
+              { key: "name", label: "Product", sortable: true },
+              { key: "barcode", label: "Barcode", render: (row) => row.barcode || "-" },
+              { key: "sku", label: "SKU", render: (row) => row.sku || "-" },
+              { key: "price", label: "Price", sortable: true, render: (row) => currency(row.price) },
+              { key: "stock", label: "Stock", sortable: true },
+              {
+                key: "status",
+                label: "Status",
+                render: (row) =>
+                  Number(row.stock) <= Number(row.reorderLevel) ? (
+                    <StatusPill tone="warning">Low stock</StatusPill>
+                  ) : (
+                    <StatusPill tone="success">Healthy</StatusPill>
+                  )
+              }
+            ]}
+            onRowClick={onEditProduct}
+            onSort={(key) => onSort("products", key)}
+            rows={products}
+            sortConfig={sortConfig}
+          />
+        </SectionCard>
+
+        <SectionCard subtitle="Quick category chips and one-step category creation." title="Categories">
+          <InlineAdd
+            busy={busy === "add-category"}
+            onSubmit={onAddCategory}
+            placeholder="Add category"
+          />
+          <div className="mt-4 flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <span
+                className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-600"
+                key={category.id}
+              >
+                {category.name}
+              </span>
+            ))}
+          </div>
+        </SectionCard>
       </div>
     </section>
   );
 }
 
-function InlineAdd({ onSubmit, placeholder }) {
+function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers }) {
+  return (
+    <section className="space-y-6">
+      <SectionCard
+        action={
+          <button className="btn-primary" onClick={onNewSupplier} type="button">
+            Add supplier
+          </button>
+        }
+        subtitle="Supplier records are shown as readable cards for faster contact lookup."
+        title="Supplier Directory"
+      >
+        {suppliers.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {suppliers.map((supplier) => (
+              <button
+                className="card p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md"
+                key={supplier.id}
+                onClick={() => onEditSupplier(supplier)}
+                type="button"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-slate-900">{supplier.name}</h3>
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">Supplier</span>
+                </div>
+                <dl className="mt-4 space-y-2 text-sm text-slate-600">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-400">Contact</dt>
+                    <dd>{supplier.contactPerson || "-"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-400">Phone</dt>
+                    <dd>{supplier.phone || "-"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-400">Email</dt>
+                    <dd className="truncate">{supplier.email || "-"}</dd>
+                  </div>
+                </dl>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            description="Create your first supplier to start replenishment workflows."
+            title="No suppliers yet"
+          />
+        )}
+      </SectionCard>
+    </section>
+  );
+}
+
+function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, products, purchaseOrders, suppliers }) {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <SectionCard subtitle="Create clean purchase orders with fewer clicks." title="Create Purchase Order">
+        <form className="space-y-5" onSubmit={onSubmit}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Supplier">
+              <select
+                className="input"
+                onChange={(event) => onChange({ ...form, supplierId: event.target.value })}
+                required
+                value={form.supplierId}
+              >
+                <option value="">Select supplier</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field helper="Optional internal note" label="Notes">
+              <textarea
+                className="input min-h-24"
+                onChange={(event) => onChange({ ...form, notes: event.target.value })}
+                rows="3"
+                value={form.notes}
+              />
+            </Field>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Order lines</h3>
+                <p className="text-sm text-slate-500">Select products, quantity, and latest supplier cost.</p>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={() => onChange({ ...form, items: [...form.items, { productId: "", quantity: 1, costPrice: 0 }] })}
+                type="button"
+              >
+                Add line
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {form.items.map((item, index) => (
+                <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1.6fr_0.7fr_0.8fr]" key={`po-item-${index}`}>
+                  <select
+                    className="input"
+                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "productId", event.target.value)}
+                    value={item.productId}
+                  >
+                    <option value="">Select product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    min="1"
+                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "quantity", event.target.value)}
+                    type="number"
+                    value={item.quantity}
+                  />
+                  <input
+                    className="input"
+                    min="0"
+                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "costPrice", event.target.value)}
+                    type="number"
+                    value={item.costPrice}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button className="btn-primary" disabled={busyKey === "create-order"} type="submit">
+            {busyKey === "create-order" ? "Creating order..." : "Create purchase order"}
+          </button>
+        </form>
+      </SectionCard>
+
+      <SectionCard subtitle="Receive pending orders directly from the list." title="Order Tracking">
+        {purchaseOrders.length ? (
+          <div className="space-y-3">
+            {purchaseOrders.map((order) => {
+              const supplier = suppliers.find((entry) => entry.id === order.supplierId);
+              const pending = order.status === "pending";
+              return (
+                <div className="card p-4" key={order.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{order.id}</p>
+                      <p className="text-sm text-slate-500">{supplier?.name || "Unknown supplier"}</p>
+                    </div>
+                    <StatusPill tone={pending ? "warning" : "success"}>{order.status}</StatusPill>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+                    <span>{order.items.length} line items</span>
+                    <span>{formatDateTime(order.createdAt)}</span>
+                  </div>
+                  {pending ? (
+                    <button
+                      className="btn-primary mt-4 w-full"
+                      disabled={busyKey === `receive-${order.id}`}
+                      onClick={() => onReceiveOrder(order.id)}
+                      type="button"
+                    >
+                      {busyKey === `receive-${order.id}` ? "Receiving..." : "Mark as received"}
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState description="Create your first purchase order to start tracking stock intake." title="No purchase orders yet" />
+        )}
+      </SectionCard>
+    </section>
+  );
+}
+
+function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, onQuantityChange, products, searchValue, setSearchValue }) {
+  const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
+  return (
+    <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="space-y-6">
+        <SectionCard subtitle="Built for fast keyboard and scan-based product lookup." title="Scan or Search">
+          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                <BarcodeIcon />
+              </span>
+              <input
+                className="input h-14 pl-12 text-base"
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="Scan barcode or search by product name"
+                ref={barcodeInputRef}
+                value={searchValue}
+              />
+            </div>
+            <button className="btn-secondary h-14 px-5" onClick={() => barcodeInputRef.current?.focus()} type="button">
+              Focus barcode
+            </button>
+          </div>
+        </SectionCard>
+
+        <SectionCard subtitle="Large product targets for faster billing under pressure." title="Products">
+          {products.length ? (
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+              {products.map((product) => (
+                <button
+                  className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+                  key={product.id}
+                  onClick={() => onAddToCart(product)}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{product.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{product.barcode || product.sku || "No code"}</p>
+                    </div>
+                    <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
+                      {product.stock}
+                    </StatusPill>
+                  </div>
+                  <div className="mt-6 flex items-end justify-between">
+                    <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
+                    <span className="text-sm text-slate-400">Tap to add</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              description="Try another barcode, SKU, or product keyword."
+              title="No matching products"
+            />
+          )}
+        </SectionCard>
+      </div>
+
+      <SectionCard subtitle="Readable bill, bigger totals, and faster quantity control." title="Current Bill">
+        <div className="flex h-full flex-col">
+          <div className="flex-1 space-y-3">
+            {cart.length ? (
+              cart.map((item) => (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={item.id}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="text-sm text-slate-500">{currency(item.price)} each</p>
+                    </div>
+                    <p className="text-lg font-semibold text-slate-900">{currency(item.price * item.quantity)}</p>
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, -1)} type="button">
+                      -
+                    </button>
+                    <div className="flex h-11 min-w-20 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900">
+                      {item.quantity}
+                    </div>
+                    <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, 1)} type="button">
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <EmptyState description="Tap a product card or scan a barcode to start the sale." title="No items in the bill" />
+            )}
+          </div>
+
+          <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Total</p>
+                <p className="mt-2 text-4xl font-semibold tracking-tight">{currency(total)}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right text-sm text-slate-300">
+                <p>{cart.length} line items</p>
+              </div>
+            </div>
+            <button className="btn-primary mt-5 w-full bg-blue-500 hover:bg-blue-400" disabled={!cart.length || busyKey === "create-sale"} onClick={onCheckout} type="button">
+              {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
+            </button>
+          </div>
+        </div>
+      </SectionCard>
+    </section>
+  );
+}
+
+function ReportsScreen({ boot }) {
+  const data = summarizeLocal(boot).summary;
+  const groupedSales = Object.entries(groupSalesByDay(boot.sales));
+
+  return (
+    <section className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard subtitle="Products with the highest movement." title="Fast-moving Items">
+          {data.fastMoving.length ? (
+            <div className="space-y-3">
+              {data.fastMoving.map((item) => (
+                <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
+          )}
+        </SectionCard>
+        <SectionCard subtitle="Products that need merchandising or stock review." title="Slow-moving Items">
+          {data.slowMoving.length ? (
+            <div className="space-y-3">
+              {data.slowMoving.map((item) => (
+                <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
+          )}
+        </SectionCard>
+      </div>
+
+      <SectionCard subtitle="Readable daily view for revenue and transaction count." title="Sales Summary">
+        <DataTable
+          columns={[
+            { key: "date", label: "Date", render: ([date]) => date },
+            { key: "count", label: "Transactions", render: ([, value]) => value.count },
+            { key: "total", label: "Revenue", render: ([, value]) => currency(value.total) }
+          ]}
+          rows={groupedSales}
+        />
+      </SectionCard>
+    </section>
+  );
+}
+
+function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users }) {
+  return (
+    <section className="space-y-6">
+      <SectionCard
+        action={
+          <button className="btn-primary" onClick={onNewUser} type="button">
+            Add user
+          </button>
+        }
+        subtitle="Cleaner access control UI with editable role cards in one place."
+        title="Team Members"
+      >
+        <DataTable
+          columns={[
+            { key: "name", label: "Name", sortable: true },
+            { key: "username", label: "Username" },
+            {
+              key: "role",
+              label: "Role",
+              render: (row) => (
+                <span className="capitalize text-slate-700">{row.role.replace("_", " ")}</span>
+              )
+            },
+            {
+              key: "active",
+              label: "Status",
+              render: (row) => (row.active ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="neutral">Disabled</StatusPill>)
+            }
+          ]}
+          onRowClick={onEditUser}
+          onSort={(key) => onSort("users", key)}
+          rows={users}
+          sortConfig={sortConfig}
+        />
+      </SectionCard>
+    </section>
+  );
+}
+
+function BackupScreen({ backupText, busyKey, onBackupTextChange, onExport, onRestore }) {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <SectionCard subtitle="Keep manual backup and restore exactly as before, but with a cleaner operator workflow." title="Backup and Restore">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Export creates a JSON snapshot. Restore uses the text payload currently pasted into the editor.
+          </div>
+          <button className="btn-primary w-full" disabled={busyKey === "export-backup"} onClick={onExport} type="button">
+            {busyKey === "export-backup" ? "Exporting..." : "Export backup"}
+          </button>
+          <button className="btn-secondary w-full" disabled={busyKey === "restore-backup"} onClick={onRestore} type="button">
+            {busyKey === "restore-backup" ? "Restoring..." : "Restore from JSON"}
+          </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard subtitle="Paste or review the snapshot below." title="Backup Payload">
+        <textarea
+          className="input min-h-[520px] font-mono text-xs"
+          onChange={(event) => onBackupTextChange(event.target.value)}
+          value={backupText}
+        />
+      </SectionCard>
+    </section>
+  );
+}
+
+function ProductForm({ busy, categories, form, onChange, onSubmit }) {
+  return (
+    <form className="space-y-4" onSubmit={onSubmit}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Product name">
+          <input className="input" onChange={(event) => onChange({ ...form, name: event.target.value })} required value={form.name} />
+        </Field>
+        <Field label="Category">
+          <select className="input" onChange={(event) => onChange({ ...form, categoryId: event.target.value })} value={form.categoryId}>
+            <option value="">Select category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Barcode">
+          <input className="input" onChange={(event) => onChange({ ...form, barcode: event.target.value })} value={form.barcode} />
+        </Field>
+        <Field label="SKU">
+          <input className="input" onChange={(event) => onChange({ ...form, sku: event.target.value })} value={form.sku} />
+        </Field>
+        <Field label="Sell price">
+          <input className="input" min="0" onChange={(event) => onChange({ ...form, price: event.target.value })} type="number" value={form.price} />
+        </Field>
+        <Field label="Cost price">
+          <input className="input" min="0" onChange={(event) => onChange({ ...form, costPrice: event.target.value })} type="number" value={form.costPrice} />
+        </Field>
+        <Field label="Stock">
+          <input className="input" min="0" onChange={(event) => onChange({ ...form, stock: event.target.value })} type="number" value={form.stock} />
+        </Field>
+        <Field label="Reorder level">
+          <input className="input" min="0" onChange={(event) => onChange({ ...form, reorderLevel: event.target.value })} type="number" value={form.reorderLevel} />
+        </Field>
+      </div>
+      <Field helper="Optional product note" label="Description">
+        <textarea
+          className="input min-h-28"
+          onChange={(event) => onChange({ ...form, description: event.target.value })}
+          rows="4"
+          value={form.description}
+        />
+      </Field>
+      <button className="btn-primary w-full" disabled={busy} type="submit">
+        {busy ? "Saving..." : form.id ? "Update product" : "Add product"}
+      </button>
+    </form>
+  );
+}
+
+function SupplierForm({ busy, form, onChange, onSubmit }) {
+  return (
+    <form className="space-y-4" onSubmit={onSubmit}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Supplier name">
+          <input className="input" onChange={(event) => onChange({ ...form, name: event.target.value })} required value={form.name} />
+        </Field>
+        <Field label="Contact person">
+          <input className="input" onChange={(event) => onChange({ ...form, contactPerson: event.target.value })} value={form.contactPerson} />
+        </Field>
+        <Field label="Phone">
+          <input className="input" onChange={(event) => onChange({ ...form, phone: event.target.value })} value={form.phone} />
+        </Field>
+        <Field label="Email">
+          <input className="input" onChange={(event) => onChange({ ...form, email: event.target.value })} value={form.email} />
+        </Field>
+      </div>
+      <Field label="Address">
+        <textarea className="input min-h-28" onChange={(event) => onChange({ ...form, address: event.target.value })} rows="4" value={form.address} />
+      </Field>
+      <button className="btn-primary w-full" disabled={busy} type="submit">
+        {busy ? "Saving..." : form.id ? "Update supplier" : "Add supplier"}
+      </button>
+    </form>
+  );
+}
+
+function UserForm({ busy, form, onChange, onSubmit }) {
+  return (
+    <form className="space-y-4" onSubmit={onSubmit}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Full name">
+          <input className="input" onChange={(event) => onChange({ ...form, name: event.target.value })} required value={form.name} />
+        </Field>
+        <Field label="Username">
+          <input className="input" onChange={(event) => onChange({ ...form, username: event.target.value })} required value={form.username} />
+        </Field>
+        <Field label="Role">
+          <select className="input" onChange={(event) => onChange({ ...form, role: event.target.value })} value={form.role}>
+            <option value="admin">Admin</option>
+            <option value="cashier">Cashier</option>
+            <option value="stock_handler">Stock Handler</option>
+          </select>
+        </Field>
+        <Field helper={form.id ? "Leave empty to keep the current password." : ""} label="Password">
+          <input className="input" onChange={(event) => onChange({ ...form, password: event.target.value })} value={form.password} />
+        </Field>
+      </div>
+      <button className="btn-primary w-full" disabled={busy} type="submit">
+        {busy ? "Saving..." : form.id ? "Update user" : "Add user"}
+      </button>
+    </form>
+  );
+}
+
+function SectionCard({ action, children, subtitle, title }) {
+  return (
+    <section className="card p-5 sm:p-6">
+      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="section-title">{title}</h3>
+          <p className="section-subtitle mt-1">{subtitle}</p>
+        </div>
+        {action ? <div>{action}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function DataTable({ columns, onRowClick, onSort, rows, sortConfig }) {
+  if (!rows.length) {
+    return <EmptyState description="Once data exists, it will appear here in a cleaner grid." title="Nothing to show yet" />;
+  }
+
+  return (
+    <div className="table-shell">
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {columns.map((column) => {
+                const sortable = Boolean(column.sortable && onSort);
+                const active = sortConfig?.key === column.key;
+                return (
+                  <th key={column.key}>
+                    {sortable ? (
+                      <button
+                        className="inline-flex items-center gap-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-slate-800"
+                        onClick={() => onSort(column.key)}
+                        type="button"
+                      >
+                        <span>{column.label}</span>
+                        <SortIcon active={active} direction={active ? sortConfig.direction : ""} />
+                      </button>
+                    ) : (
+                      column.label
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr
+                className={onRowClick ? "cursor-pointer" : ""}
+                key={row.id || row.key || index}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
+                {columns.map((column) => (
+                  <td key={column.key}>{column.render ? column.render(row) : readValue(row, column.key)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EntityModal({ children, onClose, open, subtitle, title }) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
+      <div className="card max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6 sm:p-8">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h3>
+            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          </div>
+          <button className="btn-secondary px-3 py-2" onClick={onClose} type="button">
+            <CloseIcon />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function InlineAdd({ busy, onSubmit, placeholder }) {
   const [value, setValue] = useState("");
+
   return (
     <form
-      className="inline-form"
+      className="flex gap-2"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(value);
         setValue("");
       }}
     >
-      <input placeholder={placeholder} value={value} onChange={(event) => setValue(event.target.value)} />
-      <button className="ghost-button small" type="submit">
-        Add
+      <input className="input" placeholder={placeholder} value={value} onChange={(event) => setValue(event.target.value)} />
+      <button className="btn-secondary whitespace-nowrap" disabled={busy} type="submit">
+        {busy ? "Adding..." : "Add"}
       </button>
     </form>
   );
+}
+
+function Field({ children, helper, label }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {children}
+      {helper ? <span className="mt-1 block text-xs text-slate-400">{helper}</span> : null}
+    </label>
+  );
+}
+
+function Alert({ children, tone }) {
+  const classes =
+    tone === "error"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+  return <div className={`inline-flex rounded-xl border px-3 py-2 text-sm font-medium ${classes}`}>{children}</div>;
+}
+
+function StatusPill({ children, tone }) {
+  const palette = {
+    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    warning: "bg-amber-50 text-amber-700 border-amber-200",
+    neutral: "bg-slate-100 text-slate-700 border-slate-200"
+  };
+
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${palette[tone]}`}>{children}</span>;
+}
+
+function EmptyState({ description, title }) {
+  return (
+    <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+        <BoxIcon />
+      </div>
+      <h4 className="text-base font-semibold text-slate-900">{title}</h4>
+      <p className="mt-2 max-w-md text-sm text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+function LoadingBanner({ label }) {
+  return (
+    <div className="card flex items-center gap-3 rounded-2xl border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-600" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <span className="font-medium text-slate-900">{label}</span>
+      <span className="text-sm text-slate-500">{value}</span>
+    </div>
+  );
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString();
 }
 
 function summarizeLocal(boot) {
@@ -1078,11 +1625,13 @@ function summarizeLocal(boot) {
     0
   );
   const soldMap = new Map();
+
   for (const sale of boot.sales) {
     for (const item of sale.items) {
       soldMap.set(item.productId, (soldMap.get(item.productId) || 0) + Number(item.quantity));
     }
   }
+
   const movement = boot.products.map((product) => ({
     id: product.id,
     name: product.name,
@@ -1131,7 +1680,7 @@ function addToCart(cart, setCart, product) {
 function shiftCart(setCart, productId, delta) {
   setCart((current) =>
     current
-      .map((item) => (item.id === productId ? { ...item, quantity: item.quantity + delta } : item))
+      .map((item) => (item.id === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
       .filter((item) => item.quantity > 0)
   );
 }
@@ -1141,4 +1690,187 @@ function updatePurchaseOrderItem(setForm, form, index, field, value) {
     itemIndex === index ? { ...item, [field]: value } : item
   );
   setForm({ ...form, items });
+}
+
+function sortRows(rows, config) {
+  const data = [...rows];
+  if (!config?.key) {
+    return data;
+  }
+
+  data.sort((left, right) => {
+    const a = readValue(left, config.key);
+    const b = readValue(right, config.key);
+
+    if (typeof a === "number" && typeof b === "number") {
+      return config.direction === "asc" ? a - b : b - a;
+    }
+
+    const result = String(a ?? "").localeCompare(String(b ?? ""), undefined, { numeric: true, sensitivity: "base" });
+    return config.direction === "asc" ? result : -result;
+  });
+
+  return data;
+}
+
+function readValue(row, key) {
+  if (Array.isArray(row)) {
+    if (key === "date") {
+      return row[0];
+    }
+    if (key === "count") {
+      return row[1]?.count;
+    }
+    if (key === "total") {
+      return row[1]?.total;
+    }
+  }
+
+  return row?.[key];
+}
+
+function iconPath(path) {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+      {path}
+    </svg>
+  );
+}
+
+function StoreIcon() {
+  return iconPath(
+    <>
+      <path d="M4 10.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8.5" />
+      <path d="M3 8.5 4.8 4h14.4L21 8.5A2.5 2.5 0 0 1 18.5 11H18a3 3 0 0 1-3-2 3 3 0 0 1-6 0 3 3 0 0 1-3 2h-.5A2.5 2.5 0 0 1 3 8.5Z" />
+    </>
+  );
+}
+
+function HomeIcon() {
+  return iconPath(<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />);
+}
+
+function CartIcon() {
+  return iconPath(
+    <>
+      <path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 7H7" />
+      <path d="M9 20a1 1 0 1 0 0 .01" />
+      <path d="M18 20a1 1 0 1 0 0 .01" />
+    </>
+  );
+}
+
+function BoxIcon() {
+  return iconPath(
+    <>
+      <path d="m12 2 8 4.5v11L12 22 4 17.5v-11Z" />
+      <path d="M12 22V11.5" />
+      <path d="M20 6.5 12 11 4 6.5" />
+    </>
+  );
+}
+
+function TruckIcon() {
+  return iconPath(
+    <>
+      <path d="M10 17H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h10v12" />
+      <path d="M15 8h3l3 3v5a1 1 0 0 1-1 1h-1" />
+      <path d="M8 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
+      <path d="M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
+    </>
+  );
+}
+
+function ClipboardIcon() {
+  return iconPath(
+    <>
+      <path d="M9 4h6" />
+      <path d="M10 2h4a1 1 0 0 1 1 1v1h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3V3a1 1 0 0 1 1-1Z" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+      <path d="M9 8h6" />
+    </>
+  );
+}
+
+function ChartIcon() {
+  return iconPath(
+    <>
+      <path d="M4 20V10" />
+      <path d="M10 20V4" />
+      <path d="M16 20v-7" />
+      <path d="M22 20v-11" />
+    </>
+  );
+}
+
+function UsersIcon() {
+  return iconPath(
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  );
+}
+
+function ShieldIcon() {
+  return iconPath(
+    <>
+      <path d="M12 3 5 6v6c0 5 3.5 8 7 9 3.5-1 7-4 7-9V6Z" />
+      <path d="m9 12 2 2 4-4" />
+    </>
+  );
+}
+
+function SearchIcon() {
+  return iconPath(
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </>
+  );
+}
+
+function MenuIcon() {
+  return iconPath(
+    <>
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </>
+  );
+}
+
+function CloseIcon() {
+  return iconPath(
+    <>
+      <path d="m6 6 12 12" />
+      <path d="M18 6 6 18" />
+    </>
+  );
+}
+
+function BarcodeIcon() {
+  return iconPath(
+    <>
+      <path d="M4 5v14" />
+      <path d="M8 5v14" />
+      <path d="M11 5v14" />
+      <path d="M15 5v14" />
+      <path d="M18 5v14" />
+      <path d="M20 5v14" />
+    </>
+  );
+}
+
+function SortIcon({ active, direction }) {
+  return (
+    <span className={`inline-flex items-center text-slate-400 ${active ? "text-slate-700" : ""}`}>
+      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+        {direction === "desc" ? <path d="m7 10 5 5 5-5" /> : <path d="m7 14 5-5 5 5" />}
+      </svg>
+    </span>
+  );
 }
