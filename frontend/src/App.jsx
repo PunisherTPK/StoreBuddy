@@ -17,6 +17,19 @@ const demoAccounts = [
   { username: "stock", password: "stock123", role: "Stock Handler" }
 ];
 
+const accentThemes = [
+  { id: "blue", label: "Blue" },
+  { id: "emerald", label: "Emerald" },
+  { id: "purple", label: "Purple" },
+  { id: "orange", label: "Orange" },
+  { id: "rose", label: "Rose" }
+];
+
+const modeThemes = [
+  { id: "light", label: "Light mode" },
+  { id: "dark", label: "Dark mode" }
+];
+
 function currency(value) {
   return new Intl.NumberFormat("en-LK", {
     style: "currency",
@@ -92,11 +105,14 @@ export default function App() {
   const [boot, setBoot] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [busyKey, setBusyKey] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem("storebuddy-sidebar-collapsed") === "true");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "light");
+  const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [productForm, setProductForm] = useState(emptyProduct());
   const [supplierForm, setSupplierForm] = useState(emptySupplier());
   const [userForm, setUserForm] = useState(emptyUser());
@@ -111,8 +127,10 @@ export default function App() {
     sales: { key: "createdAt", direction: "desc" },
     users: { key: "name", direction: "asc" }
   });
+  const [toasts, setToasts] = useState([]);
 
   const barcodeInputRef = useRef(null);
+  const themeMenuRef = useRef(null);
 
   const roleTabs = useMemo(
     () => tabs.filter((tab) => (user ? tab.roles.includes(user.role) : false)),
@@ -180,14 +198,46 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
+    document.documentElement.dataset.mode = themeMode;
+    localStorage.setItem("storebuddy-theme-mode", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.accent = accentTheme;
+    localStorage.setItem("storebuddy-accent-theme", accentTheme);
+  }, [accentTheme]);
+
+  useEffect(() => {
+    localStorage.setItem("storebuddy-sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
     if (activeTab === "pos" && barcodeInputRef.current) {
       barcodeInputRef.current.focus();
     }
   }, [activeTab, boot]);
 
+  useEffect(() => {
+    function onPointerDown(event) {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
+        setThemeMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  function pushToast(text, tone = "success") {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setToasts((current) => [...current, { id, text, tone }]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 3200);
+  }
+
   function flash(text) {
-    setMessage(text);
-    window.setTimeout(() => setMessage(""), 2600);
+    pushToast(text, "success");
   }
 
   async function runAction(key, action) {
@@ -197,6 +247,7 @@ export default function App() {
       await action();
     } catch (actionError) {
       setError(actionError.message);
+      pushToast(actionError.message, "error");
     } finally {
       setBusyKey("");
     }
@@ -477,15 +528,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="page-shell min-h-screen">
       <div className="flex min-h-screen">
         <Sidebar
           activeTab={activeTab}
+          collapsed={sidebarCollapsed}
           onClose={() => setSidebarOpen(false)}
           onSelect={(tabId) => {
             setActiveTab(tabId);
             setSidebarOpen(false);
           }}
+          onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
           open={sidebarOpen}
           tabs={roleTabs}
           user={user}
@@ -494,12 +547,18 @@ export default function App() {
         <div className="min-w-0 flex-1">
           <TopBar
             activeTab={currentTab}
+            accentTheme={accentTheme}
             error={error}
-            message={message}
+            onAccentThemeChange={setAccentTheme}
             onLogout={logout}
             onMenu={() => setSidebarOpen(true)}
+            onModeChange={setThemeMode}
             onSearch={setGlobalSearch}
             searchValue={globalSearch}
+            themeMenuOpen={themeMenuOpen}
+            themeMenuRef={themeMenuRef}
+            themeMode={themeMode}
+            toggleThemeMenu={() => setThemeMenuOpen((current) => !current)}
             user={user}
           />
 
@@ -625,6 +684,8 @@ export default function App() {
           onSubmit={saveUser}
         />
       </EntityModal>
+
+      <ToastViewport toasts={toasts} />
     </div>
   );
 }
@@ -632,29 +693,29 @@ export default function App() {
 function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.2fr_460px]">
-      <div className="relative hidden overflow-hidden bg-slate-950 px-10 py-12 text-white lg:block">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.35),transparent_25%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.28),transparent_30%)]" />
+      <div className="relative hidden overflow-hidden px-10 py-12 text-white lg:block" style={{ background: "var(--hero-bg)" }}>
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
         <div className="relative flex h-full flex-col justify-between">
           <div className="space-y-6">
-            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">
+            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/90">
               StoreBuddy
             </span>
             <div className="max-w-2xl space-y-4">
-              <h1 className="text-5xl font-semibold leading-tight tracking-tight">
-                A retail dashboard that feels fast, clear, and ready for the counter.
+              <h1 className="text-5xl font-semibold leading-[1.02] tracking-tight">
+                A premium retail workspace with sharper hierarchy and faster daily flows.
               </h1>
-              <p className="max-w-xl text-lg text-slate-300">
-                Inventory, POS, suppliers, purchase orders, reporting, and backup workflows in one local-first workspace.
+              <p className="max-w-xl text-lg text-white/72">
+                Inventory, POS, suppliers, purchase orders, reporting, backup, and theme customization in one polished local-first dashboard.
               </p>
             </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             {demoAccounts.map((account) => (
-              <div key={account.username} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <div key={account.username} className="rounded-[24px] border border-white/12 bg-white/8 p-4 backdrop-blur-xl">
                 <p className="text-sm font-semibold text-white">{account.role}</p>
-                <p className="mt-3 text-sm text-slate-300">{account.username}</p>
-                <p className="text-sm text-blue-200">{account.password}</p>
+                <p className="mt-3 text-sm text-white/68">{account.username}</p>
+                <p className="text-sm text-white/88">{account.password}</p>
               </div>
             ))}
           </div>
@@ -662,13 +723,13 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
       </div>
 
       <div className="flex items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
-        <form className="card w-full max-w-md space-y-6 p-8" onSubmit={onSubmit}>
+        <form className="card glass-panel w-full max-w-md space-y-6 p-8" onSubmit={onSubmit}>
           <div className="space-y-2">
-            <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">
+            <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]" style={{ background: "var(--accent-50)", color: "var(--accent-700)" }}>
               Sign in
             </span>
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Welcome back</h2>
-            <p className="text-sm text-slate-500">Use one of the seeded accounts to enter the dashboard.</p>
+            <h2 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>Welcome back</h2>
+            <p className="text-sm" style={{ color: "var(--text-faint)" }}>Use one of the seeded accounts to enter the dashboard.</p>
           </div>
 
           <div className="space-y-4">
@@ -691,7 +752,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
   );
 }
 
-function Sidebar({ activeTab, onClose, onSelect, open, tabs, user }) {
+function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, open, tabs, user }) {
   return (
     <>
       <div
@@ -699,57 +760,68 @@ function Sidebar({ activeTab, onClose, onSelect, open, tabs, user }) {
         onClick={onClose}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-slate-200 bg-white p-5 transition duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 border-r p-4 transition-all duration-300 lg:static lg:translate-x-0 ${
+          collapsed ? "w-[96px]" : "w-72"
+        } ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{ background: "var(--sidebar-bg)", borderColor: "var(--sidebar-border)", backdropFilter: "blur(18px)" }}
       >
         <div className="flex h-full flex-col">
-          <div className="mb-8 flex items-start justify-between">
+          <div className="mb-6 flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
                   <StoreIcon />
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">StoreBuddy</p>
-                  <h1 className="text-lg font-semibold text-slate-900">Retail OS</h1>
+                <div className={collapsed ? "hidden" : "block"}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>StoreBuddy</p>
+                  <h1 className="text-lg font-semibold" style={{ color: "var(--text-strong)" }}>Retail OS</h1>
                 </div>
               </div>
-              <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-                <p className="text-sm capitalize text-slate-500">{user.role.replace("_", " ")}</p>
+              <div className={`mt-5 rounded-[22px] p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
+                <p className="text-sm capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
               </div>
             </div>
-            <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onClose} type="button">
-              <CloseIcon />
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="btn-secondary hidden px-3 py-2 lg:inline-flex" onClick={onToggleCollapsed} type="button">
+                {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+              </button>
+              <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onClose} type="button">
+                <CloseIcon />
+              </button>
+            </div>
           </div>
 
-          <nav className="space-y-1">
+          <nav className="space-y-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
-                    active
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${collapsed ? "justify-center" : "gap-3"} ${
+                    active ? "text-white shadow-sm" : ""
                   }`}
+                  style={
+                    active
+                      ? { background: "var(--nav-active-bg)" }
+                      : { color: "var(--text-soft)" }
+                  }
                   onClick={() => onSelect(tab.id)}
                   type="button"
                 >
                   <Icon />
-                  <span>{tab.label}</span>
+                  <span className={collapsed ? "hidden" : "block"}>{tab.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          <div className="mt-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Local-first workflow</p>
-            <p className="mt-1 text-sm text-slate-500">Built for fast billing, quick stock checks, and clean daily operations.</p>
+          <div className={`mt-auto rounded-[24px] border p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "var(--surface-3)", borderColor: "var(--border-soft)" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>Local-first workflow</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Built for fast billing, quick stock checks, and clean daily operations.</p>
           </div>
         </div>
       </aside>
@@ -757,23 +829,38 @@ function Sidebar({ activeTab, onClose, onSelect, open, tabs, user }) {
   );
 }
 
-function TopBar({ activeTab, error, message, onLogout, onMenu, onSearch, searchValue, user }) {
+function TopBar({
+  accentTheme,
+  activeTab,
+  error,
+  onAccentThemeChange,
+  onLogout,
+  onMenu,
+  onModeChange,
+  onSearch,
+  searchValue,
+  themeMenuOpen,
+  themeMenuRef,
+  themeMode,
+  toggleThemeMenu,
+  user
+}) {
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b backdrop-blur-xl" style={{ borderColor: "var(--border-soft)", background: "color-mix(in oklab, var(--surface-2) 88%, transparent)" }}>
       <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-3">
           <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onMenu} type="button">
             <MenuIcon />
           </button>
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{activeTab?.label}</h2>
-            <p className="text-sm text-slate-500">Production-style retail workspace with unchanged business logic underneath.</p>
+            <h2 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>{activeTab?.label}</h2>
+            <p className="text-sm" style={{ color: "var(--text-faint)" }}>Production-style retail workspace with unchanged business logic underneath.</p>
           </div>
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative min-w-0 md:w-80">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-faint)" }}>
               <SearchIcon />
             </span>
             <input
@@ -785,11 +872,25 @@ function TopBar({ activeTab, error, message, onLogout, onMenu, onSearch, searchV
           </div>
 
           <div className="flex items-center gap-3">
-            {message ? <Alert tone="success">{message}</Alert> : null}
             {error ? <Alert tone="error">{error}</Alert> : null}
-            <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:block">
-              <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-              <p className="text-xs capitalize text-slate-500">{user.role.replace("_", " ")}</p>
+            <div className="hidden rounded-2xl border px-4 py-2 md:block" style={{ borderColor: "var(--border-soft)", background: "var(--surface-3)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
+              <p className="text-xs capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
+            </div>
+            <div className="relative" ref={themeMenuRef}>
+              <button className="btn-secondary" onClick={toggleThemeMenu} type="button">
+                <PaletteIcon />
+                Theme
+              </button>
+              {themeMenuOpen ? (
+                <ThemeMenu
+                  accentTheme={accentTheme}
+                  modeThemes={modeThemes}
+                  onAccentThemeChange={onAccentThemeChange}
+                  onModeChange={onModeChange}
+                  themeMode={themeMode}
+                />
+              ) : null}
             </div>
             <button className="btn-secondary" onClick={onLogout} type="button">
               Sign out
@@ -1445,7 +1546,7 @@ function UserForm({ busy, form, onChange, onSubmit }) {
 
 function SectionCard({ action, children, subtitle, title }) {
   return (
-    <section className="card p-5 sm:p-6">
+    <section className="card glass-panel p-5 sm:p-6">
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="section-title">{title}</h3>
@@ -1517,11 +1618,11 @@ function EntityModal({ children, onClose, open, subtitle, title }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-      <div className="card max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6 sm:p-8">
+      <div className="card glass-panel max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6 sm:p-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h3>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>{title}</h3>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>{subtitle}</p>
           </div>
           <button className="btn-secondary px-3 py-2" onClick={onClose} type="button">
             <CloseIcon />
@@ -1566,38 +1667,45 @@ function Field({ children, helper, label }) {
 function Alert({ children, tone }) {
   const classes =
     tone === "error"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+      ? "border-red-300/45 bg-red-500/10 text-red-500"
+      : "border-emerald-300/45 bg-emerald-500/10 text-emerald-500";
 
   return <div className={`inline-flex rounded-xl border px-3 py-2 text-sm font-medium ${classes}`}>{children}</div>;
 }
 
 function StatusPill({ children, tone }) {
   const palette = {
-    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    warning: "bg-amber-50 text-amber-700 border-amber-200",
-    neutral: "bg-slate-100 text-slate-700 border-slate-200"
+    success: "bg-emerald-500/10 text-emerald-500 border-emerald-300/30",
+    warning: "bg-orange-500/10 text-orange-500 border-orange-300/30",
+    neutral: "border text-[var(--text-soft)]"
   };
 
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${palette[tone]}`}>{children}</span>;
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${palette[tone]}`}
+      style={tone === "neutral" ? { background: "rgba(var(--accent-rgb), 0.08)", borderColor: "rgba(var(--accent-rgb), 0.18)" } : undefined}
+    >
+      {children}
+    </span>
+  );
 }
 
 function EmptyState({ description, title }) {
   return (
-    <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
-      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+    <div className="flex min-h-52 flex-col items-center justify-center rounded-[26px] border border-dashed px-6 py-10 text-center" style={{ borderColor: "var(--border-strong)", background: "rgba(var(--accent-rgb), 0.04)" }}>
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm" style={{ background: "var(--surface-2)", color: "var(--text-faint)" }}>
         <BoxIcon />
       </div>
-      <h4 className="text-base font-semibold text-slate-900">{title}</h4>
-      <p className="mt-2 max-w-md text-sm text-slate-500">{description}</p>
+      <h4 className="text-base font-semibold" style={{ color: "var(--text-strong)" }}>{title}</h4>
+      <p className="mt-2 max-w-md text-sm" style={{ color: "var(--text-faint)" }}>{description}</p>
     </div>
   );
 }
 
 function LoadingBanner({ label }) {
   return (
-    <div className="card flex items-center gap-3 rounded-2xl border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-600" />
+    <div className="card flex items-center gap-3 rounded-2xl px-4 py-3 text-sm" style={{ borderColor: "rgba(var(--accent-rgb), 0.22)", background: "rgba(var(--accent-rgb), 0.08)", color: "var(--accent-700)" }}>
+      <span className="h-2.5 w-2.5 animate-pulse rounded-full" style={{ background: "var(--accent-500)" }} />
       <span>{label}</span>
     </div>
   );
@@ -1605,9 +1713,91 @@ function LoadingBanner({ label }) {
 
 function MetricRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <span className="font-medium text-slate-900">{label}</span>
-      <span className="text-sm text-slate-500">{value}</span>
+    <div className="flex items-center justify-between rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-soft)", background: "var(--surface-3)" }}>
+      <span className="font-medium" style={{ color: "var(--text-strong)" }}>{label}</span>
+      <span className="text-sm" style={{ color: "var(--text-faint)" }}>{value}</span>
+    </div>
+  );
+}
+
+function ThemeMenu({ accentTheme, modeThemes, onAccentThemeChange, onModeChange, themeMode }) {
+  return (
+    <div className="absolute right-0 top-14 z-30 w-80 rounded-[28px] border p-4 shadow-2xl backdrop-blur-xl" style={{ background: "linear-gradient(180deg, var(--surface-2), var(--surface-1))", borderColor: "var(--border-soft)" }}>
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--text-faint)" }}>Appearance</p>
+          <div className="mt-3 grid gap-2">
+            {modeThemes.map((mode) => (
+              <button
+                key={mode.id}
+                className="flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition"
+                onClick={() => onModeChange(mode.id)}
+                style={{
+                  background: themeMode === mode.id ? "rgba(var(--accent-rgb), 0.1)" : "var(--surface-3)",
+                  borderColor: themeMode === mode.id ? "rgba(var(--accent-rgb), 0.26)" : "var(--border-soft)",
+                  color: "var(--text-strong)"
+                }}
+                type="button"
+              >
+                <span>{mode.label}</span>
+                {themeMode === mode.id ? <CheckIcon /> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--text-faint)" }}>Accent theme</p>
+          <div className="mt-3 grid grid-cols-5 gap-2">
+            {accentThemes.map((theme) => (
+              <button
+                key={theme.id}
+                className="flex flex-col items-center gap-2 rounded-2xl border px-2 py-3 text-xs font-medium transition"
+                onClick={() => onAccentThemeChange(theme.id)}
+                style={{
+                  background: accentTheme === theme.id ? "rgba(var(--accent-rgb), 0.08)" : "var(--surface-3)",
+                  borderColor: accentTheme === theme.id ? "rgba(var(--accent-rgb), 0.26)" : "var(--border-soft)",
+                  color: "var(--text-soft)"
+                }}
+                type="button"
+              >
+                <span className={`h-5 w-5 rounded-full ${accentSwatchClass(theme.id)}`} />
+                <span>{theme.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ToastViewport({ toasts }) {
+  return (
+    <div className="pointer-events-none fixed right-4 top-4 z-[70] flex w-full max-w-sm flex-col gap-3">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className="pointer-events-auto rounded-[24px] border px-4 py-3 shadow-2xl backdrop-blur-xl"
+          style={{
+            background: "linear-gradient(180deg, var(--surface-2), var(--surface-1))",
+            borderColor: toast.tone === "error" ? "rgba(var(--danger-rgb), 0.28)" : "rgba(var(--accent-rgb), 0.24)"
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className="mt-0.5 h-2.5 w-2.5 rounded-full"
+              style={{ background: toast.tone === "error" ? "rgb(var(--danger-rgb))" : "var(--accent-500)" }}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                {toast.tone === "error" ? "Action failed" : "Done"}
+              </p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-soft)" }}>{toast.text}</p>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1727,6 +1917,18 @@ function readValue(row, key) {
   }
 
   return row?.[key];
+}
+
+function accentSwatchClass(themeId) {
+  const classes = {
+    blue: "bg-blue-500",
+    emerald: "bg-emerald-500",
+    purple: "bg-violet-500",
+    orange: "bg-orange-500",
+    rose: "bg-rose-500"
+  };
+
+  return classes[themeId] || classes.blue;
 }
 
 function iconPath(path) {
@@ -1867,10 +2069,33 @@ function BarcodeIcon() {
 
 function SortIcon({ active, direction }) {
   return (
-    <span className={`inline-flex items-center text-slate-400 ${active ? "text-slate-700" : ""}`}>
+    <span className={`inline-flex items-center ${active ? "text-slate-700" : "text-slate-400"}`}>
       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
         {direction === "desc" ? <path d="m7 10 5 5 5-5" /> : <path d="m7 14 5-5 5 5" />}
       </svg>
     </span>
   );
+}
+
+function PaletteIcon() {
+  return iconPath(
+    <>
+      <path d="M12 22a10 10 0 1 1 10-10c0 1.7-1.3 3-3 3h-1.1c-1 0-1.9.8-1.9 1.8 0 .5.2 1 .5 1.3.4.4.5.9.5 1.4 0 1.3-1.2 2.5-2.7 2.5H12Z" />
+      <path d="M7.5 11a1 1 0 1 0 0 .01" />
+      <path d="M12 7a1 1 0 1 0 0 .01" />
+      <path d="M16.5 11a1 1 0 1 0 0 .01" />
+    </>
+  );
+}
+
+function ChevronLeftIcon() {
+  return iconPath(<path d="m15 18-6-6 6-6" />);
+}
+
+function ChevronRightIcon() {
+  return iconPath(<path d="m9 18 6-6-6-6" />);
+}
+
+function CheckIcon() {
+  return iconPath(<path d="m5 12 4 4 10-10" />);
 }

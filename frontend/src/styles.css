@@ -1,23 +1,106 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #eef6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-surface-50: #f8fafc;
-  --color-surface-100: #f1f5f9;
-  --color-surface-200: #e2e8f0;
-  --color-surface-300: #cbd5e1;
-  --color-surface-500: #64748b;
-  --color-surface-700: #334155;
-  --color-surface-900: #0f172a;
-  --color-success-50: #ecfdf5;
-  --color-success-500: #10b981;
-  --color-warning-50: #fff7ed;
-  --color-warning-500: #f97316;
   --shadow-soft: 0 12px 32px rgba(15, 23, 42, 0.08);
+  --shadow-premium: 0 20px 60px rgba(15, 23, 42, 0.14);
+}
+
+:root {
+  --accent-50: #eef4ff;
+  --accent-100: #dbeafe;
+  --accent-500: #2563eb;
+  --accent-600: #1d4ed8;
+  --accent-700: #1e40af;
+  --accent-rgb: 37 99 235;
+  --success-rgb: 16 185 129;
+  --warning-rgb: 249 115 22;
+  --danger-rgb: 239 68 68;
+  --app-bg: #f3f7fc;
+  --app-bg-secondary: #edf3fb;
+  --surface-1: rgba(255, 255, 255, 0.88);
+  --surface-2: rgba(255, 255, 255, 0.98);
+  --surface-3: #f8fbff;
+  --surface-inverse: #0f172a;
+  --text-strong: #0f172a;
+  --text-soft: #475569;
+  --text-faint: #64748b;
+  --border-soft: rgba(148, 163, 184, 0.26);
+  --border-strong: rgba(100, 116, 139, 0.34);
+  --sidebar-bg: rgba(255, 255, 255, 0.82);
+  --sidebar-border: rgba(148, 163, 184, 0.22);
+  --nav-hover: rgba(var(--accent-rgb), 0.08);
+  --nav-active-bg: linear-gradient(135deg, rgba(var(--accent-rgb), 0.96), rgba(var(--accent-rgb), 0.78));
+  --hero-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.34), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(var(--accent-rgb), 0.2), transparent 34%),
+    linear-gradient(180deg, #081226, #101c35);
+}
+
+html[data-mode="dark"] {
+  color-scheme: dark;
+  --app-bg: #08101d;
+  --app-bg-secondary: #0c1628;
+  --surface-1: rgba(14, 23, 39, 0.72);
+  --surface-2: rgba(17, 27, 46, 0.92);
+  --surface-3: rgba(23, 35, 58, 0.92);
+  --surface-inverse: #f8fafc;
+  --text-strong: #e5eefc;
+  --text-soft: #b8c7df;
+  --text-faint: #8ea0bc;
+  --border-soft: rgba(148, 163, 184, 0.14);
+  --border-strong: rgba(148, 163, 184, 0.24);
+  --sidebar-bg: rgba(8, 16, 29, 0.86);
+  --sidebar-border: rgba(148, 163, 184, 0.12);
+  --nav-hover: rgba(var(--accent-rgb), 0.15);
+  --hero-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.28), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(var(--accent-rgb), 0.18), transparent 28%),
+    linear-gradient(180deg, #050913, #0b1324);
+}
+
+html[data-accent="blue"] {
+  --accent-50: #eef4ff;
+  --accent-100: #dbeafe;
+  --accent-500: #2563eb;
+  --accent-600: #1d4ed8;
+  --accent-700: #1e40af;
+  --accent-rgb: 37 99 235;
+}
+
+html[data-accent="emerald"] {
+  --accent-50: #ecfdf5;
+  --accent-100: #d1fae5;
+  --accent-500: #10b981;
+  --accent-600: #059669;
+  --accent-700: #047857;
+  --accent-rgb: 16 185 129;
+}
+
+html[data-accent="purple"] {
+  --accent-50: #f5f3ff;
+  --accent-100: #ede9fe;
+  --accent-500: #8b5cf6;
+  --accent-600: #7c3aed;
+  --accent-700: #6d28d9;
+  --accent-rgb: 139 92 246;
+}
+
+html[data-accent="orange"] {
+  --accent-50: #fff7ed;
+  --accent-100: #ffedd5;
+  --accent-500: #f97316;
+  --accent-600: #ea580c;
+  --accent-700: #c2410c;
+  --accent-rgb: 249 115 22;
+}
+
+html[data-accent="rose"] {
+  --accent-50: #fff1f2;
+  --accent-100: #ffe4e6;
+  --accent-500: #f43f5e;
+  --accent-600: #e11d48;
+  --accent-700: #be123c;
+  --accent-rgb: 244 63 94;
 }
 
 @layer base {
@@ -26,11 +109,16 @@
   }
 
   body {
-    @apply min-h-screen bg-slate-50 text-slate-900 antialiased;
-    font-family: "Segoe UI Variable Text", "Aptos", "Inter", sans-serif;
+    @apply min-h-screen antialiased;
+    color: var(--text-strong);
+    background:
+      radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.1), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(var(--accent-rgb), 0.08), transparent 30%),
+      linear-gradient(180deg, var(--app-bg), var(--app-bg-secondary));
     background-image:
-      radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 25%),
-      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 30%);
+      radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.1), transparent 25%),
+      radial-gradient(circle at bottom right, rgba(var(--accent-rgb), 0.08), transparent 30%);
+    font-family: "Segoe UI Variable Text", "Aptos", "Inter", sans-serif;
   }
 
   button,
@@ -43,59 +131,141 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-[26px] border backdrop-blur-xl;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    border-color: var(--border-soft);
     box-shadow: var(--shadow-soft);
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200 disabled:cursor-not-allowed disabled:opacity-60;
+    background: linear-gradient(135deg, var(--accent-500), var(--accent-700));
+    box-shadow: 0 14px 30px rgba(var(--accent-rgb), 0.22);
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition duration-200 disabled:cursor-not-allowed disabled:opacity-60;
+    color: var(--text-soft);
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
   }
 
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100;
+    @apply w-full rounded-2xl px-3 py-2.5 text-sm outline-none transition duration-200 placeholder:opacity-75;
+    color: var(--text-strong);
+    background: color-mix(in oklab, var(--surface-2) 92%, white 8%);
+    border: 1px solid var(--border-soft);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .label {
-    @apply mb-2 block text-sm font-medium text-slate-700;
+    @apply mb-2 block text-sm font-medium;
+    color: var(--text-soft);
   }
 
   .section-title {
-    @apply text-lg font-semibold text-slate-900;
+    @apply text-lg font-semibold tracking-tight;
+    color: var(--text-strong);
   }
 
   .section-subtitle {
-    @apply text-sm text-slate-500;
+    @apply text-sm;
+    color: var(--text-faint);
   }
 
   .table-shell {
-    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
+    @apply overflow-hidden rounded-[24px] border backdrop-blur-xl;
+    background: color-mix(in oklab, var(--surface-2) 95%, white 5%);
+    border-color: var(--border-soft);
   }
 
   .data-table {
-    @apply min-w-full divide-y divide-slate-200 text-sm;
+    @apply min-w-full text-sm;
   }
 
   .data-table thead {
-    @apply bg-slate-50;
+    background: color-mix(in oklab, var(--surface-3) 90%, white 10%);
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+    @apply sticky top-0 z-10 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em];
+    color: var(--text-faint);
   }
 
   .data-table td {
-    @apply px-4 py-3 text-slate-700;
+    @apply px-4 py-4 align-middle;
+    color: var(--text-soft);
   }
 
   .data-table tbody tr {
-    @apply border-t border-slate-100 transition hover:bg-slate-50/70;
+    @apply transition duration-150;
+    border-top: 1px solid var(--border-soft);
   }
 
   .data-table tbody tr:nth-child(even) {
-    @apply bg-slate-50/30;
+    background: rgba(var(--accent-rgb), 0.02);
   }
+
+  .page-shell {
+    background:
+      radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.08), transparent 22%),
+      radial-gradient(circle at bottom right, rgba(var(--accent-rgb), 0.06), transparent 28%),
+      linear-gradient(180deg, var(--app-bg), var(--app-bg-secondary));
+  }
+
+  .glass-panel {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-premium);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 34px rgba(var(--accent-rgb), 0.28);
+  }
+
+  .btn-primary:active,
+  .btn-secondary:active {
+    transform: translateY(0);
+  }
+
+  .btn-secondary:hover {
+    background: color-mix(in oklab, var(--surface-2) 82%, var(--accent-50) 18%);
+    border-color: rgba(var(--accent-rgb), 0.22);
+  }
+
+  .input:focus {
+    border-color: rgba(var(--accent-rgb), 0.5);
+    box-shadow:
+      0 0 0 4px rgba(var(--accent-rgb), 0.14),
+      0 8px 24px rgba(var(--accent-rgb), 0.08);
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(var(--accent-rgb), 0.06);
+  }
+}
+
+@layer utilities {
+  .bg-slate-50 { background-color: var(--surface-3) !important; }
+  .bg-slate-100 { background-color: rgba(var(--accent-rgb), 0.08) !important; }
+  .bg-slate-950 { background-color: #08101d !important; }
+  .bg-white { background-color: var(--surface-2) !important; }
+  .border-slate-100 { border-color: var(--border-soft) !important; }
+  .border-slate-200 { border-color: var(--border-soft) !important; }
+  .text-slate-900 { color: var(--text-strong) !important; }
+  .text-slate-800 { color: var(--text-strong) !important; }
+  .text-slate-700 { color: var(--text-soft) !important; }
+  .text-slate-600 { color: var(--text-soft) !important; }
+  .text-slate-500 { color: var(--text-faint) !important; }
+  .text-slate-400 { color: var(--text-faint) !important; }
+  .bg-blue-50 { background-color: var(--accent-50) !important; }
+  .text-blue-700 { color: var(--accent-700) !important; }
+  .text-blue-600 { color: var(--accent-600) !important; }
+  .bg-blue-600 { background-color: var(--accent-600) !important; }
+  .bg-blue-500 { background-color: var(--accent-500) !important; }
+  .hover\:bg-blue-700:hover { background-color: var(--accent-700) !important; }
+  .hover\:bg-blue-400:hover { background-color: color-mix(in oklab, var(--accent-500) 82%, white 18%) !important; }
+  .hover\:border-blue-200:hover { border-color: rgba(var(--accent-rgb), 0.22) !important; }
+  .text-emerald-600 { color: rgb(var(--success-rgb)) !important; }
 }
