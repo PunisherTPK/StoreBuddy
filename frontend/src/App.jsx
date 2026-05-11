@@ -139,10 +139,12 @@ export default function App() {
   );
 
   const currentTab = roleTabs.find((tab) => tab.id === activeTab) || roleTabs[0];
+  const searchQuery = globalSearch.trim().toLowerCase();
+  const searchConfig = getSearchConfig(activeTab);
 
   const filteredProducts = useMemo(() => {
     const products = boot?.products || [];
-    const query = globalSearch.trim().toLowerCase();
+    const query = searchQuery;
     if (!query) {
       return products;
     }
@@ -152,15 +154,55 @@ export default function App() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     );
-  }, [boot?.products, globalSearch]);
+  }, [boot?.products, searchQuery]);
+
+  const filteredSuppliers = useMemo(() => {
+    const suppliers = boot?.suppliers || [];
+    if (!searchQuery) {
+      return suppliers;
+    }
+
+    return suppliers.filter((supplier) =>
+      [supplier.name, supplier.contactPerson, supplier.phone, supplier.email, supplier.address]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(searchQuery))
+    );
+  }, [boot?.suppliers, searchQuery]);
+
+  const filteredUsers = useMemo(() => {
+    const users = boot?.users || [];
+    if (!searchQuery) {
+      return users;
+    }
+
+    return users.filter((entry) =>
+      [entry.name, entry.username, entry.role]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(searchQuery))
+    );
+  }, [boot?.users, searchQuery]);
+
+  const filteredOrders = useMemo(() => {
+    const orders = boot?.purchaseOrders || [];
+    if (!searchQuery) {
+      return orders;
+    }
+
+    return orders.filter((order) => {
+      const supplierName = boot?.suppliers?.find((supplier) => supplier.id === order.supplierId)?.name || "";
+      return [order.id, order.status, order.notes, supplierName]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(searchQuery));
+    });
+  }, [boot?.purchaseOrders, boot?.suppliers, searchQuery]);
 
   const sortedProducts = useMemo(() => {
     return sortRows(filteredProducts, sortConfig.products);
   }, [filteredProducts, sortConfig.products]);
 
   const sortedUsers = useMemo(() => {
-    return sortRows(boot?.users || [], sortConfig.users);
-  }, [boot?.users, sortConfig.users]);
+    return sortRows(filteredUsers, sortConfig.users);
+  }, [filteredUsers, sortConfig.users]);
 
   const recentSales = useMemo(() => {
     return sortRows(boot?.sales || [], sortConfig.sales).slice(0, 8);
@@ -624,8 +666,8 @@ export default function App() {
   }
 
   return (
-    <div className="page-shell min-h-screen">
-      <div className="flex min-h-screen">
+    <div className="page-shell h-screen overflow-hidden">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar
           activeTab={activeTab}
           collapsed={sidebarCollapsed}
@@ -640,7 +682,7 @@ export default function App() {
           user={user}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <TopBar
             activeTab={currentTab}
             accentTheme={accentTheme}
@@ -650,6 +692,7 @@ export default function App() {
             onMenu={() => setSidebarOpen(true)}
             onModeChange={setThemeMode}
             onSearch={setGlobalSearch}
+            searchConfig={searchConfig}
             searchValue={globalSearch}
             themeMenuOpen={themeMenuOpen}
             themeMenuRef={themeMenuRef}
@@ -658,84 +701,104 @@ export default function App() {
             user={user}
           />
 
-          <main className="space-y-6 px-4 pb-8 pt-4 sm:px-6 lg:px-8">
-            {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
+          <main className="flex-1 overflow-hidden px-4 pb-6 pt-4 sm:px-6 lg:px-8">
+            <div className="flex h-full min-h-0 flex-col gap-6">
+              {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
 
-            {activeTab === "dashboard" ? (
-              <DashboardScreen summary={boot.summary} products={boot.products} sales={recentSales} />
-            ) : null}
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeTab === "dashboard" ? (
+                  <ScreenScrollArea>
+                    <DashboardScreen summary={boot.summary} products={boot.products} sales={recentSales} />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "inventory" ? (
-              <InventoryScreen
-                busy={busyKey}
-                categories={boot.categories}
-                onAddCategory={addCategory}
-                onEditProduct={openEditProductModal}
-                onNewProduct={openNewProductModal}
-                onSort={onSort}
-                products={sortedProducts}
-                sortConfig={sortConfig.products}
-              />
-            ) : null}
+                {activeTab === "inventory" ? (
+                  <ScreenScrollArea>
+                    <InventoryScreen
+                      busy={busyKey}
+                      categories={boot.categories}
+                      onAddCategory={addCategory}
+                      onEditProduct={openEditProductModal}
+                      onNewProduct={openNewProductModal}
+                      onSort={onSort}
+                      products={sortedProducts}
+                      sortConfig={sortConfig.products}
+                    />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "suppliers" ? (
-              <SuppliersScreen
-                onEditSupplier={openEditSupplierModal}
-                onNewSupplier={openNewSupplierModal}
-                suppliers={boot.suppliers}
-              />
-            ) : null}
+                {activeTab === "suppliers" ? (
+                  <ScreenScrollArea>
+                    <SuppliersScreen
+                      onEditSupplier={openEditSupplierModal}
+                      onNewSupplier={openNewSupplierModal}
+                      suppliers={filteredSuppliers}
+                    />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "orders" ? (
-              <OrdersScreen
-                busyKey={busyKey}
-                form={purchaseOrderForm}
-                onChange={setPurchaseOrderForm}
-                onReceiveOrder={receiveOrder}
-                onSubmit={createPurchaseOrder}
-                products={boot.products}
-                purchaseOrders={boot.purchaseOrders}
-                suppliers={boot.suppliers}
-              />
-            ) : null}
+                {activeTab === "orders" ? (
+                  <ScreenScrollArea>
+                    <OrdersScreen
+                      busyKey={busyKey}
+                      form={purchaseOrderForm}
+                      onChange={setPurchaseOrderForm}
+                      onReceiveOrder={receiveOrder}
+                      onSubmit={createPurchaseOrder}
+                      products={boot.products}
+                      purchaseOrders={filteredOrders}
+                      suppliers={boot.suppliers}
+                    />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "pos" ? (
-              <PosScreen
-                barcodeInputRef={barcodeInputRef}
-                busyKey={busyKey}
-                cart={cart}
-                onAddToCart={(product) => addToCart(cart, setCart, product)}
-                onBarcodeSubmit={handlePosBarcodeSubmit}
-                onCheckout={createSale}
-                onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
-                posNotice={posNotice}
-                products={filteredProducts}
-                searchValue={globalSearch}
-                setSearchValue={setGlobalSearch}
-              />
-            ) : null}
+                {activeTab === "pos" ? (
+                  <PosScreen
+                    barcodeInputRef={barcodeInputRef}
+                    busyKey={busyKey}
+                    cart={cart}
+                    onAddToCart={(product) => addToCart(cart, setCart, product)}
+                    onBarcodeSubmit={handlePosBarcodeSubmit}
+                    onCheckout={createSale}
+                    onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                    posNotice={posNotice}
+                    products={filteredProducts}
+                    searchValue={globalSearch}
+                    setSearchValue={setGlobalSearch}
+                  />
+                ) : null}
 
-            {activeTab === "reports" ? <ReportsScreen boot={boot} /> : null}
+                {activeTab === "reports" ? (
+                  <ScreenScrollArea>
+                    <ReportsScreen boot={boot} />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "users" ? (
-              <UsersScreen
-                onEditUser={openEditUserModal}
-                onNewUser={openNewUserModal}
-                onSort={onSort}
-                sortConfig={sortConfig.users}
-                users={sortedUsers}
-              />
-            ) : null}
+                {activeTab === "users" ? (
+                  <ScreenScrollArea>
+                    <UsersScreen
+                      onEditUser={openEditUserModal}
+                      onNewUser={openNewUserModal}
+                      onSort={onSort}
+                      sortConfig={sortConfig.users}
+                      users={sortedUsers}
+                    />
+                  </ScreenScrollArea>
+                ) : null}
 
-            {activeTab === "backup" ? (
-              <BackupScreen
-                backupText={backupText}
-                busyKey={busyKey}
-                onBackupTextChange={setBackupText}
-                onExport={exportBackup}
-                onRestore={restoreBackup}
-              />
-            ) : null}
+                {activeTab === "backup" ? (
+                  <ScreenScrollArea>
+                    <BackupScreen
+                      backupText={backupText}
+                      busyKey={busyKey}
+                      onBackupTextChange={setBackupText}
+                      onExport={exportBackup}
+                      onRestore={restoreBackup}
+                    />
+                  </ScreenScrollArea>
+                ) : null}
+              </div>
+            </div>
           </main>
         </div>
       </div>
@@ -864,8 +927,8 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
         style={{ background: "var(--sidebar-bg)", borderColor: "var(--sidebar-border)", backdropFilter: "blur(18px)" }}
       >
         <div className="flex h-full flex-col">
-          <div className="mb-6 flex items-start justify-between">
-            <div>
+          <div className={`mb-6 ${collapsed ? "flex flex-col items-center gap-4" : "flex items-start justify-between"}`}>
+            <div className={collapsed ? "flex flex-col items-center" : ""}>
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
                   <StoreIcon />
@@ -880,7 +943,7 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
                 <p className="text-sm capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
               <button className="btn-secondary hidden px-3 py-2 lg:inline-flex" onClick={onToggleCollapsed} type="button">
                 {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
               </button>
@@ -933,6 +996,7 @@ function TopBar({
   onMenu,
   onModeChange,
   onSearch,
+  searchConfig,
   searchValue,
   themeMenuOpen,
   themeMenuRef,
@@ -954,17 +1018,19 @@ function TopBar({
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="relative min-w-0 md:w-80">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-faint)" }}>
-              <SearchIcon />
-            </span>
-            <input
-              className="input pl-10"
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="Search products, barcode, or SKU"
-              value={searchValue}
-            />
-          </div>
+          {searchConfig.visible ? (
+            <div className="relative min-w-0 md:w-80">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-faint)" }}>
+                <SearchIcon />
+              </span>
+              <input
+                className="input pl-10"
+                onChange={(event) => onSearch(event.target.value)}
+                placeholder={searchConfig.placeholder}
+                value={searchValue}
+              />
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-3">
             {error ? <Alert tone="error">{error}</Alert> : null}
@@ -1021,7 +1087,14 @@ function DashboardScreen({ products, sales, summary }) {
           {summary.lowStockItems.length ? (
             <div className="space-y-3">
               {summary.lowStockItems.map((product) => (
-                <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3" key={product.id}>
+                <div
+                  className="flex items-center justify-between rounded-2xl border px-4 py-3"
+                  key={product.id}
+                  style={{
+                    borderColor: "rgba(var(--warning-rgb), 0.26)",
+                    background: "rgba(var(--warning-rgb), 0.1)"
+                  }}
+                >
                   <div>
                     <p className="font-medium text-slate-900">{product.name}</p>
                     <p className="text-sm text-slate-500">Reorder at {product.reorderLevel}</p>
@@ -1325,8 +1398,8 @@ function PosScreen({
   const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
   return (
-    <section className="grid gap-6 pb-36 xl:grid-cols-[1.25fr_0.75fr]">
-      <div className="space-y-6">
+    <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
+      <div className="grid gap-6 xl:h-[calc(100vh-11.5rem)] xl:grid-rows-[auto_minmax(0,1fr)_auto]">
         <SectionCard subtitle="Built for fast keyboard and scan-based product lookup." title="Scan or Search">
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="relative">
@@ -1365,42 +1438,76 @@ function PosScreen({
           )}
         </SectionCard>
 
-        <SectionCard subtitle="Large product targets for faster billing under pressure." title="Products">
-          {products.length ? (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-              {products.map((product) => (
-                <button
-                  className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
-                  key={product.id}
-                  onClick={() => onAddToCart(product)}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{product.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{product.barcode || product.sku || "No code"}</p>
+        <SectionCard
+          className="h-full min-h-0"
+          contentClassName="h-full min-h-0 overflow-y-auto pr-1"
+          subtitle="Large product targets for faster billing under pressure."
+          title="Products"
+        >
+          <div>
+            {products.length ? (
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                {products.map((product) => (
+                  <button
+                    className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+                    key={product.id}
+                    onClick={() => onAddToCart(product)}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">{product.name}</p>
+                        <p className="mt-1 text-sm text-slate-500">{product.barcode || product.sku || "No code"}</p>
+                      </div>
+                      <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
+                        {product.stock}
+                      </StatusPill>
                     </div>
-                    <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
-                      {product.stock}
-                    </StatusPill>
-                  </div>
-                  <div className="mt-6 flex items-end justify-between">
-                    <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
-                    <span className="text-sm text-slate-400">Tap to add</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              description="Try another barcode, SKU, or product keyword."
-              title="No matching products"
-            />
-          )}
+                    <div className="mt-6 flex items-end justify-between">
+                      <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
+                      <span className="text-sm text-slate-400">Tap to add</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                description="Try another barcode, SKU, or product keyword."
+                title="No matching products"
+              />
+            )}
+          </div>
         </SectionCard>
+
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-end justify-between gap-4 md:min-w-[280px]">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Total</p>
+                <p className="mt-2 text-4xl font-semibold tracking-tight">{currency(total)}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right text-sm text-slate-300">
+                <p>{cart.length} line items</p>
+              </div>
+            </div>
+            <button
+              className="btn-primary h-14 w-full bg-blue-500 text-base hover:bg-blue-400 md:w-72"
+              disabled={!cart.length || busyKey === "create-sale"}
+              onClick={onCheckout}
+              type="button"
+            >
+              {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <SectionCard subtitle="Readable bill, bigger totals, and faster quantity control." title="Current Bill">
+      <SectionCard
+        className="h-full min-h-0"
+        contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
+        subtitle="Readable bill, bigger totals, and faster quantity control."
+        title="Current Bill"
+      >
         <div className="space-y-3">
           {cart.length ? (
             cart.map((item) => (
@@ -1430,30 +1537,6 @@ function PosScreen({
           )}
         </div>
       </SectionCard>
-
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-30 w-[min(760px,calc(100vw-1.5rem))] -translate-x-1/2 px-1">
-        <div className="pointer-events-auto rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-end justify-between gap-4 md:min-w-[280px]">
-              <div>
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Total</p>
-                <p className="mt-2 text-4xl font-semibold tracking-tight">{currency(total)}</p>
-              </div>
-              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right text-sm text-slate-300">
-                <p>{cart.length} line items</p>
-              </div>
-            </div>
-            <button
-              className="btn-primary h-14 w-full bg-blue-500 text-base hover:bg-blue-400 md:w-72"
-              disabled={!cart.length || busyKey === "create-sale"}
-              onClick={onCheckout}
-              type="button"
-            >
-              {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
-            </button>
-          </div>
-        </div>
-      </div>
     </section>
   );
 }
@@ -1570,6 +1653,10 @@ function BackupScreen({ backupText, busyKey, onBackupTextChange, onExport, onRes
   );
 }
 
+function ScreenScrollArea({ children }) {
+  return <div className="h-full overflow-y-auto pr-1">{children}</div>;
+}
+
 function ProductForm({ busy, categories, form, onChange, onSubmit }) {
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
@@ -1676,9 +1763,9 @@ function UserForm({ busy, form, onChange, onSubmit }) {
   );
 }
 
-function SectionCard({ action, children, subtitle, title }) {
+function SectionCard({ action, children, className = "", contentClassName = "", subtitle, title }) {
   return (
-    <section className="card glass-panel p-5 sm:p-6">
+    <section className={`card glass-panel flex min-h-0 flex-col overflow-hidden p-5 sm:p-6 ${className}`}>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="section-title">{title}</h3>
@@ -1686,7 +1773,7 @@ function SectionCard({ action, children, subtitle, title }) {
         </div>
         {action ? <div>{action}</div> : null}
       </div>
-      {children}
+      <div className={`min-h-0 ${contentClassName}`}>{children}</div>
     </section>
   );
 }
@@ -1893,7 +1980,7 @@ function ThemeMenu({ accentTheme, modeThemes, onAccentThemeChange, onModeChange,
                 }}
                 type="button"
               >
-                <span className={`h-5 w-5 rounded-full ${accentSwatchClass(theme.id)}`} />
+                <span className="h-5 w-5 rounded-full" style={{ background: accentSwatchColor(theme.id) }} />
                 <span>{theme.label}</span>
               </button>
             ))}
@@ -2051,16 +2138,31 @@ function readValue(row, key) {
   return row?.[key];
 }
 
-function accentSwatchClass(themeId) {
-  const classes = {
-    blue: "bg-blue-500",
-    emerald: "bg-emerald-500",
-    purple: "bg-violet-500",
-    orange: "bg-orange-500",
-    rose: "bg-rose-500"
+function accentSwatchColor(themeId) {
+  const colors = {
+    blue: "#2563eb",
+    emerald: "#10b981",
+    purple: "#8b5cf6",
+    orange: "#f97316",
+    rose: "#f43f5e"
   };
 
-  return classes[themeId] || classes.blue;
+  return colors[themeId] || colors.blue;
+}
+
+function getSearchConfig(tabId) {
+  const configs = {
+    dashboard: { visible: false, placeholder: "" },
+    pos: { visible: true, placeholder: "Search products, barcode, or SKU" },
+    inventory: { visible: true, placeholder: "Search products, barcode, or SKU" },
+    suppliers: { visible: true, placeholder: "Search suppliers, contacts, phone, or email" },
+    orders: { visible: true, placeholder: "Search order ID, supplier, status, or notes" },
+    users: { visible: true, placeholder: "Search users, usernames, or roles" },
+    reports: { visible: false, placeholder: "" },
+    backup: { visible: false, placeholder: "" }
+  };
+
+  return configs[tabId] || { visible: false, placeholder: "" };
 }
 
 function iconPath(path) {
