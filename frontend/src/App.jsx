@@ -122,6 +122,7 @@ export default function App() {
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [posNotice, setPosNotice] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
     sales: { key: "createdAt", direction: "desc" },
@@ -238,6 +239,80 @@ export default function App() {
 
   function flash(text) {
     pushToast(text, "success");
+  }
+
+  function showPosNotice(text, tone = "error") {
+    const id = `pos-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setPosNotice({ id, text, tone });
+    window.setTimeout(() => {
+      setPosNotice((current) => (current?.id === id ? null : current));
+    }, 1400);
+  }
+
+  function playErrorBeep() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+      const context = new AudioContextClass();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = "square";
+      oscillator.frequency.value = 420;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.13);
+      oscillator.onended = () => {
+        context.close().catch(() => { });
+      };
+    } catch {
+      // Ignore audio failures; the visual warning still covers the UX.
+    }
+  }
+
+  function playSuccessBeep() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      const context = new AudioContextClass();
+      const gain = context.createGain();
+      gain.connect(context.destination);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+
+      const first = context.createOscillator();
+      first.type = "sine";
+      first.frequency.value = 880;
+      first.connect(gain);
+
+      const second = context.createOscillator();
+      second.type = "sine";
+      second.frequency.value = 1174;
+      second.connect(gain);
+
+      gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+
+      first.start(context.currentTime);
+      first.stop(context.currentTime + 0.08);
+      second.start(context.currentTime + 0.09);
+      second.stop(context.currentTime + 0.19);
+
+      second.onended = () => {
+        context.close().catch(() => { });
+      };
+    } catch {
+      // Ignore audio failures; the visual success state still covers the UX.
+    }
   }
 
   async function runAction(key, action) {
@@ -516,6 +591,27 @@ export default function App() {
     });
   }
 
+  function handlePosBarcodeSubmit() {
+    const value = globalSearch.trim();
+    if (!value) {
+      return;
+    }
+
+    const matchedProduct = (boot?.products || []).find((product) => String(product.barcode || "").trim() === value);
+
+    if (!matchedProduct) {
+      playErrorBeep();
+      showPosNotice(`No inventory item found for barcode ${value}.`, "error");
+      return;
+    }
+
+    addToCart(cart, setCart, matchedProduct);
+    playSuccessBeep();
+    setGlobalSearch("");
+    showPosNotice(`${matchedProduct.name} added to bill.`, "success");
+    window.setTimeout(() => barcodeInputRef.current?.focus(), 20);
+  }
+
   if (!token || !user || !boot) {
     return (
       <LoginScreen
@@ -609,8 +705,10 @@ export default function App() {
                 busyKey={busyKey}
                 cart={cart}
                 onAddToCart={(product) => addToCart(cart, setCart, product)}
+                onBarcodeSubmit={handlePosBarcodeSubmit}
                 onCheckout={createSale}
                 onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                posNotice={posNotice}
                 products={filteredProducts}
                 searchValue={globalSearch}
                 setSearchValue={setGlobalSearch}
@@ -760,11 +858,9 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
         onClick={onClose}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-40 border-r p-4 transition-all duration-300 lg:static lg:translate-x-0 ${
-          collapsed ? "w-[96px]" : "w-72"
-        } ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 border-r p-4 transition-all duration-300 lg:static lg:translate-x-0 ${collapsed ? "w-[96px]" : "w-72"
+          } ${open ? "translate-x-0" : "-translate-x-full"
+          }`}
         style={{ background: "var(--sidebar-bg)", borderColor: "var(--sidebar-border)", backdropFilter: "blur(18px)" }}
       >
         <div className="flex h-full flex-col">
@@ -801,9 +897,8 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
               return (
                 <button
                   key={tab.id}
-                  className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${collapsed ? "justify-center" : "gap-3"} ${
-                    active ? "text-white shadow-sm" : ""
-                  }`}
+                  className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${collapsed ? "justify-center" : "gap-3"} ${active ? "text-white shadow-sm" : ""
+                    }`}
                   style={
                     active
                       ? { background: "var(--nav-active-bg)" }
@@ -1214,11 +1309,23 @@ function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, produ
   );
 }
 
-function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, onQuantityChange, products, searchValue, setSearchValue }) {
+function PosScreen({
+  barcodeInputRef,
+  busyKey,
+  cart,
+  onAddToCart,
+  onBarcodeSubmit,
+  onCheckout,
+  onQuantityChange,
+  posNotice,
+  products,
+  searchValue,
+  setSearchValue
+}) {
   const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+    <section className="grid gap-6 pb-36 xl:grid-cols-[1.25fr_0.75fr]">
       <div className="space-y-6">
         <SectionCard subtitle="Built for fast keyboard and scan-based product lookup." title="Scan or Search">
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
@@ -1228,6 +1335,12 @@ function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, on
               </span>
               <input
                 className="input h-14 pl-12 text-base"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onBarcodeSubmit();
+                  }
+                }}
                 onChange={(event) => setSearchValue(event.target.value)}
                 placeholder="Scan barcode or search by product name"
                 ref={barcodeInputRef}
@@ -1238,6 +1351,18 @@ function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, on
               Focus barcode
             </button>
           </div>
+          {posNotice ? (
+            <div
+              className={`mt-3 inline-flex rounded-2xl border px-4 py-2 text-sm font-medium transition ${posNotice.tone === "error" ? "border-red-300/45 bg-red-500/10 text-red-500" : "border-emerald-300/45 bg-emerald-500/10 text-emerald-500"
+                }`}
+            >
+              {posNotice.text}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm" style={{ color: "var(--text-faint)" }}>
+              Enter an exact barcode and press Enter to add the item instantly.
+            </p>
+          )}
         </SectionCard>
 
         <SectionCard subtitle="Large product targets for faster billing under pressure." title="Products">
@@ -1276,38 +1401,40 @@ function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, on
       </div>
 
       <SectionCard subtitle="Readable bill, bigger totals, and faster quantity control." title="Current Bill">
-        <div className="flex h-full flex-col">
-          <div className="flex-1 space-y-3">
-            {cart.length ? (
-              cart.map((item) => (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={item.id}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.name}</p>
-                      <p className="text-sm text-slate-500">{currency(item.price)} each</p>
-                    </div>
-                    <p className="text-lg font-semibold text-slate-900">{currency(item.price * item.quantity)}</p>
+        <div className="space-y-3">
+          {cart.length ? (
+            cart.map((item) => (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={item.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-slate-900">{item.name}</p>
+                    <p className="text-sm text-slate-500">{currency(item.price)} each</p>
                   </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, -1)} type="button">
-                      -
-                    </button>
-                    <div className="flex h-11 min-w-20 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900">
-                      {item.quantity}
-                    </div>
-                    <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, 1)} type="button">
-                      +
-                    </button>
-                  </div>
+                  <p className="text-lg font-semibold text-slate-900">{currency(item.price * item.quantity)}</p>
                 </div>
-              ))
-            ) : (
-              <EmptyState description="Tap a product card or scan a barcode to start the sale." title="No items in the bill" />
-            )}
-          </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, -1)} type="button">
+                    -
+                  </button>
+                  <div className="flex h-11 min-w-20 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900">
+                    {item.quantity}
+                  </div>
+                  <button className="btn-secondary h-11 w-11 rounded-2xl px-0" onClick={() => onQuantityChange(item.id, 1)} type="button">
+                    +
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyState description="Tap a product card or scan a barcode to start the sale." title="No items in the bill" />
+          )}
+        </div>
+      </SectionCard>
 
-          <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
-            <div className="flex items-end justify-between gap-4">
+      <div className="pointer-events-none fixed bottom-5 left-1/2 z-30 w-[min(760px,calc(100vw-1.5rem))] -translate-x-1/2 px-1">
+        <div className="pointer-events-auto rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-end justify-between gap-4 md:min-w-[280px]">
               <div>
                 <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Total</p>
                 <p className="mt-2 text-4xl font-semibold tracking-tight">{currency(total)}</p>
@@ -1316,12 +1443,17 @@ function PosScreen({ barcodeInputRef, busyKey, cart, onAddToCart, onCheckout, on
                 <p>{cart.length} line items</p>
               </div>
             </div>
-            <button className="btn-primary mt-5 w-full bg-blue-500 hover:bg-blue-400" disabled={!cart.length || busyKey === "create-sale"} onClick={onCheckout} type="button">
+            <button
+              className="btn-primary h-14 w-full bg-blue-500 text-base hover:bg-blue-400 md:w-72"
+              disabled={!cart.length || busyKey === "create-sale"}
+              onClick={onCheckout}
+              type="button"
+            >
               {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
             </button>
           </div>
         </div>
-      </SectionCard>
+      </div>
     </section>
   );
 }
