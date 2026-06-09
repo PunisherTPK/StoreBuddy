@@ -6,13 +6,16 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const seedFile = path.join(__dirname, "..", "data", "store.json");
-
-const pool = mysql.createPool({
+const dbConfig = {
   host: process.env.MYSQL_HOST || "127.0.0.1",
   port: Number(process.env.MYSQL_PORT || 3306),
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "mypass",
-  database: process.env.MYSQL_DATABASE || "storebuddy",
+  database: process.env.MYSQL_DATABASE || "storebuddy"
+};
+
+const pool = mysql.createPool({
+  ...dbConfig,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -51,6 +54,116 @@ function normalizeStore(store) {
 async function readSeedStore() {
   const raw = await fs.readFile(seedFile, "utf8");
   return normalizeStore(JSON.parse(raw));
+}
+
+function escapeIdentifier(identifier) {
+  return `\`${String(identifier).replaceAll("`", "``")}\``;
+}
+
+async function ensureDatabase() {
+  const connection = await mysql.createConnection({
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.user,
+    password: dbConfig.password
+  });
+
+  try {
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${escapeIdentifier(dbConfig.database)}`);
+  } finally {
+    await connection.end();
+  }
+}
+
+async function createSchemaTables(connection) {
+  await createMetaTable(connection);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR(40) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      username VARCHAR(60) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role ENUM('admin', 'cashier', 'stock_handler') NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id VARCHAR(40) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      description TEXT
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id VARCHAR(40) PRIMARY KEY,
+      name VARCHAR(160) NOT NULL,
+      contact_person VARCHAR(120),
+      phone VARCHAR(40),
+      email VARCHAR(160),
+      address TEXT
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id VARCHAR(40) PRIMARY KEY,
+      category_id VARCHAR(40),
+      name VARCHAR(160) NOT NULL,
+      sku VARCHAR(80),
+      barcode VARCHAR(120),
+      price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      cost_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      stock INT NOT NULL DEFAULT 0,
+      reorder_level INT NOT NULL DEFAULT 0,
+      unit VARCHAR(30) NOT NULL DEFAULT 'pcs',
+      description TEXT,
+      CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id)
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+      id VARCHAR(40) PRIMARY KEY,
+      supplier_id VARCHAR(40) NOT NULL,
+      status ENUM('pending', 'received') NOT NULL DEFAULT 'pending',
+      created_at DATETIME NOT NULL,
+      received_at DATETIME NULL,
+      notes TEXT,
+      CONSTRAINT fk_purchase_orders_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS purchase_order_items (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      purchase_order_id VARCHAR(40) NOT NULL,
+      product_id VARCHAR(40) NOT NULL,
+      quantity INT NOT NULL,
+      cost_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      CONSTRAINT fk_purchase_order_items_order FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
+      CONSTRAINT fk_purchase_order_items_product FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS sales (
+      id VARCHAR(40) PRIMARY KEY,
+      cashier_id VARCHAR(40) NOT NULL,
+      created_at DATETIME NOT NULL,
+      subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      payment_method VARCHAR(40) NOT NULL DEFAULT 'cash',
+      CONSTRAINT fk_sales_cashier FOREIGN KEY (cashier_id) REFERENCES users(id)
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS sale_items (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sale_id VARCHAR(40) NOT NULL,
+      product_id VARCHAR(40) NOT NULL,
+      quantity INT NOT NULL,
+      price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      CONSTRAINT fk_sale_items_sale FOREIGN KEY (sale_id) REFERENCES sales(id),
+      CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+  `);
 }
 
 async function createMetaTable(connection) {
@@ -252,10 +365,11 @@ export async function ensureStore() {
     return;
   }
 
+  await ensureDatabase();
   const connection = await pool.getConnection();
 
   try {
-    await createMetaTable(connection);
+    await createSchemaTables(connection);
     const hasUsers = await tableHasRows(connection, "users");
     const hasCategories = await tableHasRows(connection, "categories");
     const hasProducts = await tableHasRows(connection, "products");
