@@ -1,6 +1,11 @@
 CREATE DATABASE IF NOT EXISTS storebuddy;
 USE storebuddy;
 
+CREATE TABLE IF NOT EXISTS app_meta (
+  meta_key VARCHAR(80) PRIMARY KEY,
+  meta_value TEXT NULL
+);
+
 CREATE TABLE users (
   id VARCHAR(40) PRIMARY KEY,
   name VARCHAR(120) NOT NULL,

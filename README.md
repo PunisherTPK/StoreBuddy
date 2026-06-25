@@ -14,8 +14,9 @@ StoreBuddy is a local-first inventory tracking and billing system for small reta
 
 - Frontend: React + Vite
 - Backend: Node.js + Express
-- Data store for this MVP: local JSON persistence in [`backend/data/store.json`](/C:/Users/User/Desktop/Bit%20Project%20V2/Site/StoreBuddy/backend/data/store.json)
-- Target database design: MySQL schema in [`database/schema.sql`](/C:/Users/User/Desktop/Bit%20Project%20V2/Site/StoreBuddy/database/schema.sql)
+- Database: MySQL
+- Schema: [`database/schema.sql`](/C:/Users/User/Desktop/Bit%20Project%20V2/Site/StoreBuddy/database/schema.sql)
+- Seed source used for first-time bootstrap: [`backend/data/store.json`](/C:/Users/User/Desktop/Bit%20Project%20V2/Site/StoreBuddy/backend/data/store.json)
 
 ## Demo Accounts
 
@@ -51,3 +52,23 @@ npm.cmd start
 ```
 
 The backend runs on `http://localhost:4000` and the Vite frontend runs on `http://localhost:5173`.
+
+## MySQL Configuration
+
+The backend now connects to MySQL using these defaults:
+
+- Host: `127.0.0.1`
+- Port: `3306`
+- Database: `storebuddy`
+- User: `root`
+- Password: `mypass`
+
+You can override them with environment variables:
+
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `MYSQL_DATABASE`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+
+On first run, if the main tables are empty, the backend seeds MySQL from [`backend/data/store.json`](/C:/Users/User/Desktop/Bit%20Project%20V2/Site/StoreBuddy/backend/data/store.json).
