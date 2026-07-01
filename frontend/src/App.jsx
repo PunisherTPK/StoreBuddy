@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import storebuddyLogo from "../src/logo2.jpeg";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
@@ -110,8 +111,10 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem("storebuddy-sidebar-collapsed") === "true");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "dark");
-  const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
+  const [themeMode, setThemeMode] = useState("dark");
+  //const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "dark");
+  //const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
+  const [accentTheme, setAccentTheme] = useState("blue");
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [productForm, setProductForm] = useState(emptyProduct());
   const [supplierForm, setSupplierForm] = useState(emptySupplier());
@@ -861,12 +864,38 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
       <section className="hidden md:flex md:w-1/2 flex-col justify-center p-8 lg:p-12 relative overflow-hidden" style={{ 
         background: "linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.08)), linear-gradient(180deg, #0f1f35, #1a2d4d)"
       }}>
+        
         <div className="animated-glow glow-1" />
         <div className="animated-glow glow-2" />
         <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+          <div className="mb-8 flex items-center justify-left gap-6">
+            <img
+              src={storebuddyLogo}
+              alt="StoreBuddy Logo"
+              className="h-25 w-25 object-contain"
+            />
+
+            <div className="leading-tight">
+              <h1
+                className="text-5xl font-bold"
+                style={{ color: "var(--text-strong)" }}
+              >
+                <span style={{ color: "var(--text-strong)" }}>Store</span>
+                <span style={{ color: "var(--accent-600)" }}>Buddy</span>
+              </h1>
+
+              <p 
+                className="text-sm font-medium"
+                style={{ color: "var(--text-faint)", whiteSpace: 'pre-wrap' }}
+              >
+                Inventory   •   Billing   •   Growth
+              </p>
+            </div>
+          </div>
+
           <header className="space-y-4">
             <h1 className="text-5xl leading-tight font-extrabold tracking-tight" style={{ color: "#ffffff" }}>
-              Manage Your <span style={{ color: "var(--accent-500)" }}>Store Smarter.</span>
+              Manage Your Store <span style={{ color: "var(--accent-500)" }}>Smarter.</span>
             </h1>
             <p className="text-lg leading-relaxed max-w-xl" style={{ color: "rgba(255, 255, 255, 0.9)" }}>
               Track inventory, manage suppliers, generate invoices, monitor stock levels, and grow your business with one powerful platform.
@@ -888,7 +917,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
             ))}
           </div>
 
-          {/* Demo Accounts Info */}
+          {/* Demo Accounts Info 
           <div className="pt-6">
             <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "rgba(255, 255, 255, 0.7)" }}>Demo Accounts</p>
             <div className="grid gap-3 md:grid-cols-3">
@@ -900,7 +929,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
         </div>
       </section>
 
@@ -908,8 +937,8 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
       <section className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 relative">
         {/* Mobile Brand Logo */}
         <div className="md:hidden absolute top-6 left-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-            <StoreIcon />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
+            <img src={storebuddyLogo} alt="StoreBuddy logo" className="h-full w-full object-contain" />
           </div>
         </div>
 
@@ -921,8 +950,8 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
           }}>
             <header className="text-center space-y-2">
               <div className="flex justify-center mb-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-                  <StoreIcon />
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
+                  <img src={storebuddyLogo} alt="StoreBuddy logo" className="h-full w-full object-contain" />
                 </div>
               </div>
               <h2 className="text-2xl font-extrabold" style={{ color: "var(--text-strong)" }}>Welcome Back</h2>
@@ -933,7 +962,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
               {/* Username Field */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold block ml-1" style={{ color: "var(--text-soft)" }} htmlFor="username">
-                  Username or Email
+                  Username
                 </label>
                 <div className="relative group">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>👤</span>
@@ -941,8 +970,8 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                     id="username"
                     name="username"
                     type="text"
-                    defaultValue="admin"
-                    placeholder="name@store.com"
+                    defaultValue=""
+                    placeholder=""
                     required
                     className="w-full pl-12 pr-4 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
                     style={{
@@ -962,9 +991,9 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                   <label className="text-sm font-semibold" style={{ color: "var(--text-soft)" }} htmlFor="password">
                     Password
                   </label>
-                  <a className="text-sm font-bold hover:underline transition-all" style={{ color: "var(--accent-600)" }} href="#">
+                  {/*<a className="text-sm font-bold hover:underline transition-all" style={{ color: "var(--accent-600)" }} href="#">
                     Forgot Password?
-                  </a>
+                  </a> */}
                 </div>
                 <div className="relative group">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>🔒</span>
@@ -972,8 +1001,8 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                     id="password"
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    defaultValue="admin123"
-                    placeholder="••••••••"
+                    defaultValue=""
+                    placeholder=""
                     required
                     className="w-full pl-12 pr-12 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
                     style={{
@@ -1033,15 +1062,15 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
               >
                 {loading ? "Signing in..." : "Login to StoreBuddy"}
               </button>
-
-              {/* Divider */}
+              {/*
+              {/* Divider 
               <div className="relative flex items-center py-2">
                 <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
                 <span className="flex-shrink mx-3 text-xs" style={{ color: "var(--text-soft)" }}>OR</span>
                 <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
               </div>
-
-              {/* Demo Button */}
+              
+              {/* Demo Button 
               <button
                 type="button"
                 onClick={() => {
@@ -1059,18 +1088,20 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
               >
                 ⚡ Continue as Demo
               </button>
+              */}
             </form>
-
+            {/*
             <footer className="text-center pt-2">
               <p className="text-sm" style={{ color: "var(--text-faint)" }}>
                 Don't have an account? <a className="font-bold hover:underline" style={{ color: "var(--accent-600)" }} href="#">Get Started Free</a>
               </p>
             </footer>
+            */}
           </div>
         </div>
 
         {/* Global Footer */}
-        <footer className="absolute bottom-4 w-full text-center px-4">
+        <footer className="absolute bottom-10 w-full text-center px-4">
           <p className="text-xs" style={{ color: "var(--text-faint)", opacity: 0.6 }}>
             © 2026 StoreBuddy. Built for Small Retail Businesses.
           </p>
