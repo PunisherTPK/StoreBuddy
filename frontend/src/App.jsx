@@ -110,7 +110,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem("storebuddy-sidebar-collapsed") === "true");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "light");
+  const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "dark");
   const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [productForm, setProductForm] = useState(emptyProduct());
@@ -852,64 +852,263 @@ export default function App() {
 }
 
 function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
-  return (
-    <div className="grid min-h-screen lg:grid-cols-[1.2fr_460px]">
-      <div className="relative hidden overflow-hidden px-10 py-12 text-white lg:block" style={{ background: "var(--hero-bg)" }}>
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
-        <div className="relative flex h-full flex-col justify-between">
-          <div className="space-y-6">
-            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/90">
-              StoreBuddy
-            </span>
-            <div className="max-w-2xl space-y-4">
-              <h1 className="text-5xl font-semibold leading-[1.02] tracking-tight">
-                A premium retail workspace with sharper hierarchy and faster daily flows.
-              </h1>
-              <p className="max-w-xl text-lg text-white/72">
-                Inventory, POS, suppliers, purchase orders, reporting, backup, and theme customization in one polished local-first dashboard.
-              </p>
-            </div>
-          </div>
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {demoAccounts.map((account) => (
-              <div key={account.username} className="rounded-[24px] border border-white/12 bg-white/8 p-4 backdrop-blur-xl">
-                <p className="text-sm font-semibold text-white">{account.role}</p>
-                <p className="mt-3 text-sm text-white/68">{account.username}</p>
-                <p className="text-sm text-white/88">{account.password}</p>
+  return (
+    <main className="min-h-screen flex flex-col md:flex-row relative" style={{ backgroundColor: "var(--app-bg)", color: "var(--text-strong)" }}>
+      {/* Left Side: Content & Branding */}
+      <section className="hidden md:flex md:w-1/2 flex-col justify-center p-8 lg:p-12 relative overflow-hidden" style={{ 
+        background: "linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.08)), linear-gradient(180deg, #0f1f35, #1a2d4d)"
+      }}>
+        <div className="animated-glow glow-1" />
+        <div className="animated-glow glow-2" />
+        <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+          <header className="space-y-4">
+            <h1 className="text-5xl leading-tight font-extrabold tracking-tight" style={{ color: "#ffffff" }}>
+              Manage Your <span style={{ color: "var(--accent-500)" }}>Store Smarter.</span>
+            </h1>
+            <p className="text-lg leading-relaxed max-w-xl" style={{ color: "rgba(255, 255, 255, 0.9)" }}>
+              Track inventory, manage suppliers, generate invoices, monitor stock levels, and grow your business with one powerful platform.
+            </p>
+          </header>
+
+          {/* Feature Grid */}
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            {[
+              { icon: "📦", label: "Smart Inventory" },
+              { icon: "💳", label: "Fast POS Billing" },
+              { icon: "🤝", label: "Supplier Management" },
+              { icon: "📊", label: "Reports & Analytics" }
+            ].map((feature, idx) => (
+              <div key={idx} className="p-4 bg-white/10 border border-white/20 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 backdrop-blur-sm hover:bg-white/15">
+                <div className="text-3xl mb-2">{feature.icon}</div>
+                <h3 className="font-bold text-white text-base">{feature.label}</h3>
               </div>
             ))}
           </div>
+
+          {/* Demo Accounts Info */}
+          <div className="pt-6">
+            <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "rgba(255, 255, 255, 0.7)" }}>Demo Accounts</p>
+            <div className="grid gap-3 md:grid-cols-3">
+              {demoAccounts.map((account) => (
+                <div key={account.username} className="rounded-xl border border-white/20 bg-white/8 p-3 backdrop-blur-sm">
+                  <p className="text-xs font-semibold" style={{ color: "#ffffff" }}>{account.role}</p>
+                  <p className="mt-2 text-xs" style={{ color: "rgba(255, 255, 255, 0.85)" }}>{account.username}</p>
+                  <p className="text-xs font-mono" style={{ color: "rgba(255, 255, 255, 0.9)" }}>{account.password}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
-        <form className="card glass-panel w-full max-w-md space-y-6 p-8" onSubmit={onSubmit}>
-          <div className="space-y-2">
-            <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]" style={{ background: "var(--accent-50)", color: "var(--accent-700)" }}>
-              Sign in
-            </span>
-            <h2 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>Welcome back</h2>
-            <p className="text-sm" style={{ color: "var(--text-faint)" }}>Use one of the seeded accounts to enter the dashboard.</p>
+      {/* Right Side: Login Form */}
+      <section className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 relative">
+        {/* Mobile Brand Logo */}
+        <div className="md:hidden absolute top-6 left-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
+            <StoreIcon />
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <Field label="Username">
-              <input className="input" defaultValue="admin" name="username" required />
-            </Field>
-            <Field label="Password">
-              <input className="input" defaultValue="admin123" name="password" required type="password" />
-            </Field>
+        <div className="w-full max-w-md">
+          <div className="rounded-3xl border p-6 md:p-8 shadow-lg space-y-6" style={{ 
+            background: "var(--surface-2)", 
+            borderColor: "var(--border-soft)",
+            backdropFilter: "blur(24px)"
+          }}>
+            <header className="text-center space-y-2">
+              <div className="flex justify-center mb-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
+                  <StoreIcon />
+                </div>
+              </div>
+              <h2 className="text-2xl font-extrabold" style={{ color: "var(--text-strong)" }}>Welcome Back</h2>
+              <p className="text-sm" style={{ color: "var(--text-faint)" }}>Sign in to continue managing your business</p>
+            </header>
+
+            <form className="space-y-4" onSubmit={onSubmit}>
+              {/* Username Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold block ml-1" style={{ color: "var(--text-soft)" }} htmlFor="username">
+                  Username or Email
+                </label>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>👤</span>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    defaultValue="admin"
+                    placeholder="name@store.com"
+                    required
+                    className="w-full pl-12 pr-4 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
+                    style={{
+                      backgroundColor: "var(--surface-3)",
+                      borderColor: "var(--border-soft)",
+                      color: "var(--text-strong)"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "var(--accent-500)"}
+                    onBlur={(e) => e.target.style.borderColor = "var(--border-soft)"}
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-sm font-semibold" style={{ color: "var(--text-soft)" }} htmlFor="password">
+                    Password
+                  </label>
+                  <a className="text-sm font-bold hover:underline transition-all" style={{ color: "var(--accent-600)" }} href="#">
+                    Forgot Password?
+                  </a>
+                </div>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>🔒</span>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    defaultValue="admin123"
+                    placeholder="••••••••"
+                    required
+                    className="w-full pl-12 pr-12 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
+                    style={{
+                      backgroundColor: "var(--surface-3)",
+                      borderColor: "var(--border-soft)",
+                      color: "var(--text-strong)"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "var(--accent-500)"}
+                    onBlur={(e) => e.target.style.borderColor = "var(--border-soft)"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "var(--text-faint)" }}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me */}
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                  style={{ accentColor: "var(--accent-600)" }}
+                />
+                <label className="text-sm cursor-pointer select-none" style={{ color: "var(--text-faint)" }} htmlFor="remember">
+                  Remember this device
+                </label>
+              </div>
+
+              {/* Error Alert */}
+              {error && (
+                <div className="p-4 rounded-lg border" style={{ 
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  borderColor: "rgba(239, 68, 68, 0.3)",
+                  color: "#dc2626"
+                }}>
+                  <p className="text-sm font-semibold">{error}</p>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 rounded-xl font-bold text-white text-base shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                style={{ 
+                  background: "linear-gradient(135deg, var(--accent-600), var(--accent-700))",
+                  boxShadow: "0 8px 16px rgba(var(--accent-rgb), 0.3)"
+                }}
+              >
+                {loading ? "Signing in..." : "Login to StoreBuddy"}
+              </button>
+
+              {/* Divider */}
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
+                <span className="flex-shrink mx-3 text-xs" style={{ color: "var(--text-soft)" }}>OR</span>
+                <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
+              </div>
+
+              {/* Demo Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const form = event?.target?.closest("form");
+                  if (form) {
+                    form.dispatchEvent(new Event("submit", { bubbles: true }));
+                  }
+                }}
+                className="w-full py-3 rounded-xl font-bold text-base border transition-all duration-200 flex items-center justify-center gap-2"
+                style={{
+                  borderColor: "var(--border-soft)",
+                  color: "var(--accent-600)",
+                  backgroundColor: "var(--surface-3)"
+                }}
+              >
+                ⚡ Continue as Demo
+              </button>
+            </form>
+
+            <footer className="text-center pt-2">
+              <p className="text-sm" style={{ color: "var(--text-faint)" }}>
+                Don't have an account? <a className="font-bold hover:underline" style={{ color: "var(--accent-600)" }} href="#">Get Started Free</a>
+              </p>
+            </footer>
           </div>
+        </div>
 
-          {error ? <Alert tone="error">{error}</Alert> : null}
+        {/* Global Footer */}
+        <footer className="absolute bottom-4 w-full text-center px-4">
+          <p className="text-xs" style={{ color: "var(--text-faint)", opacity: 0.6 }}>
+            © 2024 StoreBuddy. Built for Small Retail Businesses.
+          </p>
+        </footer>
+      </section>
 
-          <button className="btn-primary w-full" disabled={loading} type="submit">
-            {loading ? "Signing in..." : "Enter dashboard"}
-          </button>
-        </form>
-      </div>
-    </div>
+      <style>{`
+        .animated-glow {
+          position: absolute;
+          width: 600px;
+          height: 600px;
+          border-radius: 50%;
+          filter: blur(120px);
+          z-index: 0;
+          opacity: 0.15;
+          pointer-events: none;
+        }
+
+        .glow-1 {
+          background: radial-gradient(circle, rgba(var(--accent-rgb), 1) 0%, transparent 70%);
+          top: -200px;
+          left: -100px;
+          animation: drift 15s infinite alternate ease-in-out;
+        }
+
+        .glow-2 {
+          background: radial-gradient(circle, rgba(var(--accent-rgb), 0.6) 0%, transparent 70%);
+          bottom: -200px;
+          right: -100px;
+          animation: drift 20s infinite alternate-reverse ease-in-out;
+        }
+
+        @keyframes drift {
+          from { transform: translate(0, 0); }
+          to { transform: translate(100px, 100px); }
+        }
+      `}</style>
+    </main>
   );
 }
 
@@ -1038,6 +1237,7 @@ function TopBar({
               <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
               <p className="text-xs capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
             </div>
+            {/*
             <div className="relative" ref={themeMenuRef}>
               <button className="btn-secondary" onClick={toggleThemeMenu} type="button">
                 <PaletteIcon />
@@ -1053,6 +1253,7 @@ function TopBar({
                 />
               ) : null}
             </div>
+            */}
             <button className="btn-secondary" onClick={onLogout} type="button">
               Sign out
             </button>
