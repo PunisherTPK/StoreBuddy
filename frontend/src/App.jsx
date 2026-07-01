@@ -995,7 +995,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                 </div>
               </div>
 
-              {/* Remember Me */}
+              {/* Remember Me 
               <div className="flex items-center gap-2 px-1">
                 <input
                   id="remember"
@@ -1009,7 +1009,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
                   Remember this device
                 </label>
               </div>
-
+              */}
               {/* Error Alert */}
               {error && (
                 <div className="p-4 rounded-lg border" style={{ 
@@ -1072,7 +1072,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
         {/* Global Footer */}
         <footer className="absolute bottom-4 w-full text-center px-4">
           <p className="text-xs" style={{ color: "var(--text-faint)", opacity: 0.6 }}>
-            © 2024 StoreBuddy. Built for Small Retail Businesses.
+            © 2026 StoreBuddy. Built for Small Retail Businesses.
           </p>
         </footer>
       </section>
