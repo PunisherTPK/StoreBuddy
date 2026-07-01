@@ -1737,7 +1737,7 @@ function PosScreen({
       <SectionCard
         className="h-full min-h-0"
         contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
-        subtitle="Readable bill, bigger totals, and faster quantity control."
+        subtitle=""
         title="Current Bill"
       >
         <div className="space-y-3">
