@@ -1242,10 +1242,10 @@ function PosTopBar({
 
   return (
     <header
-      className="mb-6 flex flex-col gap-4 rounded-2xl border px-6 py-4 shadow-sm md:flex-row md:items-center md:justify-between"
+      className="mb-4 flex flex-col gap-4 rounded-2xl border px-4 shadow-sm md:flex-row md:items-center md:justify-between"
       style={{
-        backgroundColor: "var(--panel-bg)",
-        borderColor: "var(--border-color)"
+        backgroundColor: "#08101d",
+        borderColor: "#000000"
       }}
     >
       {/* Left */}
@@ -1253,7 +1253,7 @@ function PosTopBar({
         <img
           src={logoSrc}
           alt="StoreBuddy"
-          className="h-12 w-12 rounded-xl object-contain"
+          className="h-20 w-20 rounded-xl object-contain"
         />
 
         <div>
@@ -1295,7 +1295,7 @@ function PosTopBar({
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-60">
         <div className="text-right">
           <div
             className="text-lg font-semibold"
