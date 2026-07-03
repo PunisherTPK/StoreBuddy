@@ -1631,8 +1631,8 @@ function PosScreen({
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
-      <div className="grid gap-6 xl:h-[calc(100vh-11.5rem)] xl:grid-rows-[auto_minmax(0,1fr)_auto]">
-        <SectionCard subtitle="Built for fast keyboard and scan-based product lookup." title="Scan or Search">
+      <div className="flex flex-col gap-4 h-full">
+        <SectionCard title="Scan or Search">
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1663,17 +1663,13 @@ function PosScreen({
             >
               {posNotice.text}
             </div>
-          ) : (
-            <p className="mt-3 text-sm" style={{ color: "var(--text-faint)" }}>
-              Enter an exact barcode and press Enter to add the item instantly.
-            </p>
-          )}
+          ) : null}
         </SectionCard>
 
         <SectionCard
-          className="h-full min-h-0"
-          contentClassName="h-full min-h-0 overflow-y-auto pr-1"
-          subtitle="Large product targets for faster billing under pressure."
+          className="flex-1 min-h-0"
+          contentClassName="overflow-y-auto pr-7"
+          //subtitle="Large product targets for faster billing under pressure."
           title="Products"
         >
           <div>
