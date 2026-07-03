@@ -1748,8 +1748,8 @@ function PosScreen({
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
-      <div className="flex flex-col gap-4 h-full">
-        <SectionCard title="Scan or Search">
+      <div className="flex flex-col gap-4 min-h-0">
+        <SectionCard title="Scan or Search"> 
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1782,14 +1782,14 @@ function PosScreen({
             </div>
           ) : null}
         </SectionCard>
-
-        <SectionCard
-          className="flex-1 min-h-0"
-          contentClassName="overflow-y-auto pr-7"
+        
+        <SectionCard 
+          className="h-50 grow flex flex-col min-h-0"
+          contentClassName="overflow-y-auto pr-7 min-h-0"
           //subtitle="Large product targets for faster billing under pressure."
           title="Products"
         >
-          <div>
+          <div >
             {products.length ? (
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {products.map((product) => (
@@ -1824,7 +1824,7 @@ function PosScreen({
           </div>
         </SectionCard>
 
-        <div className="rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
+        <div className="mt-auto rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-end justify-between gap-4 md:min-w-[280px]">
               <div>
@@ -1849,7 +1849,7 @@ function PosScreen({
 
       <SectionCard
         className="h-full min-h-0"
-        contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
+        contentClassName=" flex-1 overflow-y-auto pr-1"
         subtitle=""
         title="Current Bill"
       >
@@ -1882,7 +1882,10 @@ function PosScreen({
           )}
         </div>
       </SectionCard>
+      <div className="h-22" mt-auto></div>
     </section>
+    
+    
   );
 }
 
