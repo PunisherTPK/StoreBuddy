@@ -1748,7 +1748,7 @@ function PosScreen({
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
-      <div className="flex flex-col gap-4 min-h-0">
+      <div className="flex h-full flex-col gap-4 min-h-0">
         <SectionCard title="Scan or Search"> 
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="relative">
@@ -1784,8 +1784,8 @@ function PosScreen({
         </SectionCard>
         
         <SectionCard 
-          className="h-50 grow flex flex-col min-h-0"
-          contentClassName="overflow-y-auto pr-7 min-h-0"
+          className="h-50 flex-1 flex-col min-h-0"
+          contentClassName=" overflow-y-auto pr-7 min-h-0"
           //subtitle="Large product targets for faster billing under pressure."
           title="Products"
         >
