@@ -1242,7 +1242,7 @@ function PosTopBar({
 
   return (
     <header
-      className="mb-4 flex flex-col gap-4 rounded-2xl border px-4 shadow-sm md:flex-row md:items-center md:justify-between"
+      className="mb-4 flex flex-col gap-4 rounded-2xl border px-4 shadow-lg md:flex-row md:items-center md:justify-between z-10"
       style={{
         backgroundColor: "#08101d",
         borderColor: "#000000"
@@ -1786,12 +1786,11 @@ function PosScreen({
         <SectionCard 
           className="h-50 flex-1 flex-col min-h-0"
           contentClassName=" overflow-y-auto pr-7 min-h-0"
-          //subtitle="Large product targets for faster billing under pressure."
           title="Products"
         >
           <div >
             {products.length ? (
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-3 2xl:grid-cols-3">
                 {products.map((product) => (
                   <button
                     className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
@@ -1808,9 +1807,8 @@ function PosScreen({
                         {product.stock}
                       </StatusPill>
                     </div>
-                    <div className="mt-6 flex items-end justify-between">
+                    <div className="mt-4 flex items-end justify-between">
                       <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
-                      <span className="text-sm text-slate-400">Tap to add</span>
                     </div>
                   </button>
                 ))}
