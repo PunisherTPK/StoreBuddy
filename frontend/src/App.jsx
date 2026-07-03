@@ -761,7 +761,12 @@ export default function App() {
                 ) : null}
 
                 {activeTab === "pos" ? (
-                  <div classname="h-full">
+                  <div className="h-full">
+                    <PosTopBar
+                      logoSrc={storebuddyLogo}
+                      onExit={() => setActiveTab("dashboard")}
+                      user={user.name}
+                    />
                     <PosScreen
                       barcodeInputRef={barcodeInputRef}
                       busyKey={busyKey}
@@ -1220,6 +1225,114 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
   );
 }
 
+function PosTopBar({
+  user,
+  onExit,
+  logoSrc
+}) {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <header
+      className="mb-6 flex flex-col gap-4 rounded-2xl border px-6 py-4 shadow-sm md:flex-row md:items-center md:justify-between"
+      style={{
+        backgroundColor: "var(--panel-bg)",
+        borderColor: "var(--border-color)"
+      }}
+    >
+      {/* Left */}
+      <div className="flex items-center gap-4">
+        <img
+          src={logoSrc}
+          alt="StoreBuddy"
+          className="h-12 w-12 rounded-xl object-contain"
+        />
+
+        <div>
+          <h1
+            className="text-xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            StoreBuddy POS
+          </h1>
+
+          <p
+            className="text-sm"
+            style={{ color: "var(--text-faint)" }}
+          >
+            Point of Sale
+          </p>
+        </div>
+      </div>
+
+      {/* Center */}
+      <div className="flex items-center gap-6">
+        <div
+          className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold"
+          style={{
+            backgroundColor: "#10b98120",
+            color: "#10b981"
+          }}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          ONLINE
+        </div>
+
+        <div
+          className="text-sm font-medium"
+          style={{ color: "var(--text-primary)" }}
+        >
+          👤 {user}
+        </div>
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-6">
+        <div className="text-right">
+          <div
+            className="text-lg font-semibold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {time.toLocaleTimeString()}
+          </div>
+
+          <div
+            className="text-sm"
+            style={{ color: "var(--text-faint)" }}
+          >
+            {time.toLocaleDateString(undefined, {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })}
+          </div>
+        </div>
+
+        <button
+          className="btn-secondary"
+          onClick={onExit}
+          type="button"
+        >
+          Exit POS
+        </button>
+      </div>
+    </header>
+  );
+}
+
+
+
+
+
 function TopBar({
   accentTheme,
   activeTab,
@@ -1635,15 +1748,6 @@ function PosScreen({
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
-      <div className="mb-4 flex justify-end">
-          <button
-              className="btn-secondary"
-              onClick={onExit}
-              type="button"
-          >
-              Exit POS
-          </button>
-      </div>
       <div className="flex flex-col gap-4 h-full">
         <SectionCard title="Scan or Search">
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
