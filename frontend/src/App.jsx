@@ -950,7 +950,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
           }}>
             <header className="text-center space-y-2">
               <div className="flex justify-center mb-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
                   <img src={storebuddyLogo} alt="StoreBuddy logo" className="h-full w-full object-contain" />
                 </div>
               </div>
