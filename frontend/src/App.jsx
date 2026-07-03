@@ -3,13 +3,13 @@ import storebuddyLogo from "../src/logo2.jpeg";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
-  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon },
   { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"], icon: BoxIcon },
   { id: "suppliers", label: "Suppliers", roles: ["admin", "stock_handler"], icon: TruckIcon },
   { id: "orders", label: "Purchase Orders", roles: ["admin", "stock_handler"], icon: ClipboardIcon },
   { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"], icon: ChartIcon },
   { id: "users", label: "Users", roles: ["admin"], icon: UsersIcon },
-  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon }
+  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon },
+  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon }
 ];
 
 const demoAccounts = [
@@ -1161,11 +1161,11 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
             <div className={collapsed ? "flex flex-col items-center" : ""}>
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-                  <StoreIcon />
+                  <img src={storebuddyLogo} alt="StoreBuddy Logo" className="h-25 w-25 object-contain"></img>
                 </div>
                 <div className={collapsed ? "hidden" : "block"}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>StoreBuddy</p>
-                  <h1 className="text-lg font-semibold" style={{ color: "var(--text-strong)" }}>Retail OS</h1>
+                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>StoreBuddy</h1>
+                  
                 </div>
               </div>
               <div className={`mt-5 rounded-[22px] p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
@@ -1206,11 +1206,6 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
               );
             })}
           </nav>
-
-          <div className={`mt-auto rounded-[24px] border p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "var(--surface-3)", borderColor: "var(--border-soft)" }}>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>Local-first workflow</p>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Built for fast billing, quick stock checks, and clean daily operations.</p>
-          </div>
         </div>
       </aside>
     </>
