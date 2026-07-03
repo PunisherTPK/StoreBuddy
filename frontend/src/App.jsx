@@ -1785,13 +1785,31 @@ function PosScreen({
         
         <SectionCard 
           className="h-50 flex-1 flex-col min-h-0"
-          contentClassName=" overflow-y-auto pr-7 min-h-0"
+          contentClassName=" overflow-y-auto pr-7 min-h-0 pt-1"
           title="Products"
         >
           <div >
             {products.length ? (
               <div className="grid gap-4 md:grid-cols-3 2xl:grid-cols-3">
                 {products.map((product) => (
+
+                  <button className="card rounded-2xl border border-slate-200 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md" key={product.id} onClick={() => onAddToCart(product)} type="button">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.barcode || product.sku || "No code"}</p>
+                      </div>
+
+                      <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
+                        {product.stock}
+                      </StatusPill>
+                    </div>
+
+                    <div className="mt-2 flex items-end justify-between">
+                      <p className="text-lg font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
+                    </div>
+                  </button>
+                  /* This is a large button
                   <button
                     className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
                     key={product.id}
@@ -1811,6 +1829,7 @@ function PosScreen({
                       <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
                     </div>
                   </button>
+                  */
                 ))}
               </div>
             ) : (
@@ -1839,7 +1858,7 @@ function PosScreen({
               onClick={onCheckout}
               type="button"
             >
-              {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
+              {busyKey === "create-sale" ? "Completing sale..." : "Checkout"}
             </button>
           </div>
         </div>
