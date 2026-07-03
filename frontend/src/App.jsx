@@ -126,6 +126,7 @@ export default function App() {
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [posNotice, setPosNotice] = useState(null);
+  const isPos = activeTab === "pos";
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
     sales: { key: "createdAt", direction: "desc" },
@@ -671,40 +672,44 @@ export default function App() {
   return (
     <div className="page-shell h-screen overflow-hidden">
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          activeTab={activeTab}
-          collapsed={sidebarCollapsed}
-          onClose={() => setSidebarOpen(false)}
-          onSelect={(tabId) => {
-            setActiveTab(tabId);
-            setSidebarOpen(false);
-          }}
-          onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
-          open={sidebarOpen}
-          tabs={roleTabs}
-          user={user}
-        />
-
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <TopBar
-            activeTab={currentTab}
-            accentTheme={accentTheme}
-            error={error}
-            onAccentThemeChange={setAccentTheme}
-            onLogout={logout}
-            onMenu={() => setSidebarOpen(true)}
-            onModeChange={setThemeMode}
-            onSearch={setGlobalSearch}
-            searchConfig={searchConfig}
-            searchValue={globalSearch}
-            themeMenuOpen={themeMenuOpen}
-            themeMenuRef={themeMenuRef}
-            themeMode={themeMode}
-            toggleThemeMenu={() => setThemeMenuOpen((current) => !current)}
+        {!isPos && (
+          <Sidebar
+            activeTab={activeTab}
+            collapsed={sidebarCollapsed}
+            onClose={() => setSidebarOpen(false)}
+            onSelect={(tabId) => {
+              setActiveTab(tabId);
+              setSidebarOpen(false);
+            }}
+            onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
+            open={sidebarOpen}
+            tabs={roleTabs}
             user={user}
           />
+          )}
 
-          <main className="flex-1 overflow-hidden px-4 pb-6 pt-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {!isPos && (
+            <TopBar
+              activeTab={currentTab}
+              accentTheme={accentTheme}
+              error={error}
+              onAccentThemeChange={setAccentTheme}
+              onLogout={logout}
+              onMenu={() => setSidebarOpen(true)}
+              onModeChange={setThemeMode}
+              onSearch={setGlobalSearch}
+              searchConfig={searchConfig}
+              searchValue={globalSearch}
+              themeMenuOpen={themeMenuOpen}
+              themeMenuRef={themeMenuRef}
+              themeMode={themeMode}
+              toggleThemeMenu={() => setThemeMenuOpen((current) => !current)}
+              user={user}
+            />
+          )}
+
+          <main className={`flex-1 overflow-hidden ${isPos? "p-4": "px-4 pb-6 pt-4 sm:px-6 lg:px-8"}`}>         
             <div className="flex h-full min-h-0 flex-col gap-6">
               {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
 
@@ -756,19 +761,22 @@ export default function App() {
                 ) : null}
 
                 {activeTab === "pos" ? (
-                  <PosScreen
-                    barcodeInputRef={barcodeInputRef}
-                    busyKey={busyKey}
-                    cart={cart}
-                    onAddToCart={(product) => addToCart(cart, setCart, product)}
-                    onBarcodeSubmit={handlePosBarcodeSubmit}
-                    onCheckout={createSale}
-                    onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
-                    posNotice={posNotice}
-                    products={filteredProducts}
-                    searchValue={globalSearch}
-                    setSearchValue={setGlobalSearch}
-                  />
+                  <div classname="h-full">
+                    <PosScreen
+                      barcodeInputRef={barcodeInputRef}
+                      busyKey={busyKey}
+                      cart={cart}
+                      onAddToCart={(product) => addToCart(cart, setCart, product)}
+                      onBarcodeSubmit={handlePosBarcodeSubmit}
+                      onCheckout={createSale}
+                      onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                      posNotice={posNotice}
+                      products={filteredProducts}
+                      searchValue={globalSearch}
+                      setSearchValue={setGlobalSearch}
+                      onExit={() => setActiveTab("dashboard")}
+                    />
+                  </div>
                 ) : null}
 
                 {activeTab === "reports" ? (
@@ -1620,12 +1628,22 @@ function PosScreen({
   posNotice,
   products,
   searchValue,
-  setSearchValue
+  setSearchValue,
+  onExit
 }) {
   const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
+      <div className="mb-4 flex justify-end">
+          <button
+              className="btn-secondary"
+              onClick={onExit}
+              type="button"
+          >
+              Exit POS
+          </button>
+      </div>
       <div className="flex flex-col gap-4 h-full">
         <SectionCard title="Scan or Search">
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
