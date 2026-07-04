@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import storebuddyLogo from "../src/logo2.jpeg";
+import storebuddyLogo2 from "../src/storebuddy_logo2.png";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
@@ -1173,15 +1174,17 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
           <div className={`mb-6 ${collapsed ? "flex flex-col items-center gap-4" : "flex items-start justify-between"}`}>
             <div className={collapsed ? "flex flex-col items-center" : ""}>
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-                  <img src={storebuddyLogo} alt="StoreBuddy Logo" className="h-25 w-25 object-contain"></img>
+                <div className={collapsed ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm": "flex h-40 w-40 items-center justify-center rounded-2xl text-white shadow-sm"} style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
+                  <img src={storebuddyLogo2} alt="StoreBuddy Logo" className="h-250 w-250 object-contain"></img>
                 </div>
+                {/* Storebuddy in text 
                 <div className={collapsed ? "hidden" : "block"}>
-                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>StoreBuddy</h1>
-                  
+                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>Store</h1>
+                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>Buddy</h1>
                 </div>
+                */}
               </div>
-              <div className={`mt-5 rounded-[22px] p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
+              <div className={`mt-5 rounded-[22px] p-1 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
                 <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
                 <p className="text-sm capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
               </div>
