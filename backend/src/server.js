@@ -3,7 +3,7 @@ import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createToken, hashPassword, verifyToken } from "./auth.js";
-import { generateId, readStore, withStore, writeStore } from "./store.js";
+import { generateId, readStore, withStore, writeStore } from "./storeProvider.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
