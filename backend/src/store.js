@@ -360,6 +360,16 @@ async function readMeta(connection) {
   return meta;
 }
 
+(async () => {
+  try {
+    const connection = await pool.getConnection();
+    console.log("✅ Connected to Local DB");
+    connection.release();
+  } catch (err) {
+    console.error("❌ Database connection failed:", err);
+  }
+})();
+
 export async function ensureStore() {
   if (initialized) {
     return;
@@ -368,7 +378,9 @@ export async function ensureStore() {
   await ensureDatabase();
   const connection = await pool.getConnection();
 
+
   try {
+    
     await createSchemaTables(connection);
     const hasUsers = await tableHasRows(connection, "users");
     const hasCategories = await tableHasRows(connection, "categories");
