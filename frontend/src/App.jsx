@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import storebuddyLogo from "../src/logo2.jpeg";
 import storebuddyLogo2 from "../src/storebuddy_logo2.png";
 
+const API_URL = import.meta.env.VITE_API_URL || "";
+
 const tabs = [
   { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
   { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"], icon: BoxIcon },
@@ -41,7 +43,7 @@ function currency(value) {
 }
 
 async function api(path, options = {}, token) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
