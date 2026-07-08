@@ -1,9 +1,12 @@
+import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createToken, hashPassword, verifyToken } from "./auth.js";
-import { generateId, readStore, withStore, writeStore } from "./store.js";
+import { generateId, readStore, withStore, writeStore } from "./storeProvider.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -481,11 +484,21 @@ app.post("/api/backup/restore", authRequired, allowRoles("admin"), async (req, r
   });
 });
 
-app.use(express.static(frontendDist));
+if (process.env.NODE_ENV !== "production") {
+  app.use(express.static(frontendDist));
 
-app.use((_req, res) => {
-  res.sendFile(path.join(frontendDist, "index.html"));
-});
+  app.use((_req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  app.get("/", (_req, res) => {
+    res.json({
+      name: "StoreBuddy Backend",
+      status: "running"
+    });
+  });
+}
+
 
 app.listen(PORT, () => {
   console.log(`StoreBuddy backend running on http://localhost:${PORT}`);

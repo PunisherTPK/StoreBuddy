@@ -1,25 +1,30 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import mysql from "mysql2/promise";
+import pg from "pg";
 import { fileURLToPath } from "node:url";
+
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const seedFile = path.join(__dirname, "..", "data", "store.json");
-const dbConfig = {
-  host: process.env.MYSQL_HOST || "127.0.0.1",
-  port: Number(process.env.MYSQL_PORT || 3306),
-  user: process.env.MYSQL_USER || "root",
-  password: process.env.MYSQL_PASSWORD || "mypass",
-  database: process.env.MYSQL_DATABASE || "storebuddy"
-};
 
-const pool = mysql.createPool({
-  ...dbConfig,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
+
+(async () => {
+  try {
+    const client = await pool.connect();
+    console.log("✅ Connected to Supabase");
+    client.release();
+  } catch (err) {
+    console.error("❌ Supabase connection failed:", err);
+  }
+})();
 
 let initialized = false;
 
@@ -57,23 +62,9 @@ async function readSeedStore() {
 }
 
 function escapeIdentifier(identifier) {
-  return `\`${String(identifier).replaceAll("`", "``")}\``;
+  return `"${String(identifier).replaceAll('"', '""')}"`;
 }
 
-async function ensureDatabase() {
-  const connection = await mysql.createConnection({
-    host: dbConfig.host,
-    port: dbConfig.port,
-    user: dbConfig.user,
-    password: dbConfig.password
-  });
-
-  try {
-    await connection.query(`CREATE DATABASE IF NOT EXISTS ${escapeIdentifier(dbConfig.database)}`);
-  } finally {
-    await connection.end();
-  }
-}
 
 async function createSchemaTables(connection) {
   await createMetaTable(connection);
@@ -83,7 +74,7 @@ async function createSchemaTables(connection) {
       name VARCHAR(120) NOT NULL,
       username VARCHAR(60) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
-      role ENUM('admin', 'cashier', 'stock_handler') NOT NULL,
+      role VARCHAR(32) NOT NULL CHECK (role IN ('admin', 'cashier', 'stock_handler')),
       active BOOLEAN NOT NULL DEFAULT TRUE
     )
   `);
@@ -111,10 +102,10 @@ async function createSchemaTables(connection) {
       name VARCHAR(160) NOT NULL,
       sku VARCHAR(80),
       barcode VARCHAR(120),
-      price DECIMAL(10, 2) NOT NULL DEFAULT 0,
-      cost_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
-      stock INT NOT NULL DEFAULT 0,
-      reorder_level INT NOT NULL DEFAULT 0,
+      price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      cost_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      stock INTEGER NOT NULL DEFAULT 0,
+      reorder_level INTEGER NOT NULL DEFAULT 0,
       unit VARCHAR(30) NOT NULL DEFAULT 'pcs',
       description TEXT,
       CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -124,20 +115,20 @@ async function createSchemaTables(connection) {
     CREATE TABLE IF NOT EXISTS purchase_orders (
       id VARCHAR(40) PRIMARY KEY,
       supplier_id VARCHAR(40) NOT NULL,
-      status ENUM('pending', 'received') NOT NULL DEFAULT 'pending',
-      created_at DATETIME NOT NULL,
-      received_at DATETIME NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'received')),
+      created_at TIMESTAMP NOT NULL,
+      received_at TIMESTAMP NULL,
       notes TEXT,
       CONSTRAINT fk_purchase_orders_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
     )
   `);
   await connection.query(`
     CREATE TABLE IF NOT EXISTS purchase_order_items (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id BIGSERIAL PRIMARY KEY,
       purchase_order_id VARCHAR(40) NOT NULL,
       product_id VARCHAR(40) NOT NULL,
-      quantity INT NOT NULL,
-      cost_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      quantity INTEGER NOT NULL,
+      cost_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
       CONSTRAINT fk_purchase_order_items_order FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
       CONSTRAINT fk_purchase_order_items_product FOREIGN KEY (product_id) REFERENCES products(id)
     )
@@ -146,20 +137,20 @@ async function createSchemaTables(connection) {
     CREATE TABLE IF NOT EXISTS sales (
       id VARCHAR(40) PRIMARY KEY,
       cashier_id VARCHAR(40) NOT NULL,
-      created_at DATETIME NOT NULL,
-      subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
-      total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL,
+      subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      total NUMERIC(10, 2) NOT NULL DEFAULT 0,
       payment_method VARCHAR(40) NOT NULL DEFAULT 'cash',
       CONSTRAINT fk_sales_cashier FOREIGN KEY (cashier_id) REFERENCES users(id)
     )
   `);
   await connection.query(`
     CREATE TABLE IF NOT EXISTS sale_items (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id BIGSERIAL PRIMARY KEY,
       sale_id VARCHAR(40) NOT NULL,
       product_id VARCHAR(40) NOT NULL,
-      quantity INT NOT NULL,
-      price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      quantity INTEGER NOT NULL,
+      price NUMERIC(10, 2) NOT NULL DEFAULT 0,
       CONSTRAINT fk_sale_items_sale FOREIGN KEY (sale_id) REFERENCES sales(id),
       CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products(id)
     )
@@ -176,7 +167,7 @@ async function createMetaTable(connection) {
 }
 
 async function tableHasRows(connection, tableName) {
-  const [rows] = await connection.query(`SELECT COUNT(*) AS total FROM ${tableName}`);
+  const { rows } = await connection.query(`SELECT COUNT(*) AS total FROM ${escapeIdentifier(tableName)}`);
   return Number(rows[0].total) > 0;
 }
 
@@ -192,8 +183,8 @@ async function seedMeta(connection, meta) {
     await connection.query(
       `
         INSERT INTO app_meta (meta_key, meta_value)
-        VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value)
+        VALUES ($1, $2)
+        ON CONFLICT (meta_key) DO UPDATE SET meta_value = EXCLUDED.meta_value
       `,
       [key, value]
     );
@@ -203,7 +194,7 @@ async function seedMeta(connection, meta) {
 async function replaceStore(connection, store) {
   const normalized = normalizeStore(store);
 
-  await connection.beginTransaction();
+  await connection.query("BEGIN");
 
   try {
     await createMetaTable(connection);
@@ -221,7 +212,7 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO users (id, name, username, password_hash, role, active)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [user.id, user.name, user.username, user.passwordHash, user.role, Boolean(user.active)]
       );
@@ -231,7 +222,7 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO categories (id, name, description)
-          VALUES (?, ?, ?)
+          VALUES ($1, $2, $3)
         `,
         [category.id, category.name, category.description || null]
       );
@@ -241,7 +232,7 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO suppliers (id, name, contact_person, phone, email, address)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
           supplier.id,
@@ -259,7 +250,7 @@ async function replaceStore(connection, store) {
         `
           INSERT INTO products
             (id, category_id, name, sku, barcode, price, cost_price, stock, reorder_level, unit, description)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `,
         [
           product.id,
@@ -281,7 +272,7 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO purchase_orders (id, supplier_id, status, created_at, received_at, notes)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
           order.id,
@@ -297,7 +288,7 @@ async function replaceStore(connection, store) {
         await connection.query(
           `
             INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, cost_price)
-            VALUES (?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4)
           `,
           [order.id, item.productId, Number(item.quantity || 0), Number(item.costPrice || 0)]
         );
@@ -308,7 +299,7 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
           sale.id,
@@ -324,7 +315,7 @@ async function replaceStore(connection, store) {
         await connection.query(
           `
             INSERT INTO sale_items (sale_id, product_id, quantity, price)
-            VALUES (?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4)
           `,
           [sale.id, item.productId, Number(item.quantity || 0), Number(item.price || 0)]
         );
@@ -332,16 +323,16 @@ async function replaceStore(connection, store) {
     }
 
     await seedMeta(connection, normalized.meta);
-    await connection.commit();
+    await connection.query("COMMIT");
     return normalized;
   } catch (error) {
-    await connection.rollback();
+    await connection.query("ROLLBACK");
     throw error;
   }
 }
 
 function toMysqlDate(value) {
-  return new Date(value).toISOString().slice(0, 19).replace("T", " ");
+  return new Date(value).toISOString();
 }
 
 function toIso(value) {
@@ -350,7 +341,7 @@ function toIso(value) {
 
 async function readMeta(connection) {
   await createMetaTable(connection);
-  const [rows] = await connection.query("SELECT meta_key, meta_value FROM app_meta");
+  const { rows } = await connection.query("SELECT meta_key, meta_value FROM app_meta");
   const meta = defaultMeta();
 
   for (const row of rows) {
@@ -360,27 +351,15 @@ async function readMeta(connection) {
   return meta;
 }
 
-(async () => {
-  try {
-    const connection = await pool.getConnection();
-    console.log("✅ Connected to Local DB");
-    connection.release();
-  } catch (err) {
-    console.error("❌ Database connection failed:", err);
-  }
-})();
-
 export async function ensureStore() {
   if (initialized) {
     return;
   }
 
-  await ensureDatabase();
-  const connection = await pool.getConnection();
 
+  const connection = await pool.connect();
 
   try {
-    
     await createSchemaTables(connection);
     const hasUsers = await tableHasRows(connection, "users");
     const hasCategories = await tableHasRows(connection, "categories");
@@ -403,43 +382,43 @@ export async function ensureStore() {
 export async function readStore() {
   await ensureStore();
 
-  const connection = await pool.getConnection();
+  const connection = await pool.connect();
 
   try {
-    const [users] = await connection.query(`
-      SELECT id, name, username, password_hash AS passwordHash, role, active
+    const { rows: users } = await connection.query(`
+      SELECT id, name, username, password_hash AS "passwordHash", role, active
       FROM users
       ORDER BY name ASC
     `);
 
-    const [categories] = await connection.query(`
+    const { rows: categories } = await connection.query(`
       SELECT id, name, description
       FROM categories
       ORDER BY name ASC
     `);
 
-    const [products] = await connection.query(`
+    const { rows: products } = await connection.query(`
       SELECT
         id,
-        category_id AS categoryId,
+        category_id AS "categoryId",
         name,
         sku,
         barcode,
         price,
-        cost_price AS costPrice,
+        cost_price AS "costPrice",
         stock,
-        reorder_level AS reorderLevel,
+        reorder_level AS "reorderLevel",
         unit,
         description
       FROM products
       ORDER BY name ASC
     `);
 
-    const [suppliers] = await connection.query(`
+    const { rows: suppliers } = await connection.query(`
       SELECT
         id,
         name,
-        contact_person AS contactPerson,
+        contact_person AS "contactPerson",
         phone,
         email,
         address
@@ -447,34 +426,34 @@ export async function readStore() {
       ORDER BY name ASC
     `);
 
-    const [orderRows] = await connection.query(`
+    const { rows: orderRows } = await connection.query(`
       SELECT
         po.id,
-        po.supplier_id AS supplierId,
+        po.supplier_id AS "supplierId",
         po.status,
-        po.created_at AS createdAt,
-        po.received_at AS receivedAt,
+        po.created_at AS "createdAt",
+        po.received_at AS "receivedAt",
         po.notes,
-        poi.product_id AS productId,
+        poi.product_id AS "productId",
         poi.quantity,
-        poi.cost_price AS costPrice
+        poi.cost_price AS "costPrice"
       FROM purchase_orders po
       LEFT JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
       ORDER BY po.created_at DESC, poi.id ASC
     `);
 
-    const [saleRows] = await connection.query(`
+    const { rows: saleRows } = await connection.query(`
       SELECT
         s.id,
-        s.cashier_id AS cashierId,
-        s.created_at AS createdAt,
+        s.cashier_id AS "cashierId",
+        s.created_at AS "createdAt",
         s.subtotal,
         s.total,
-        s.payment_method AS paymentMethod,
-        si.product_id AS productId,
+        s.payment_method AS "paymentMethod",
+        si.product_id AS "productId",
         si.quantity,
         si.price,
-        p.name AS productName
+        p.name AS "productName"
       FROM sales s
       LEFT JOIN sale_items si ON si.sale_id = s.id
       LEFT JOIN products p ON p.id = si.product_id
@@ -568,7 +547,7 @@ function collapseSales(rows) {
 
 export async function writeStore(store) {
   await ensureStore();
-  const connection = await pool.getConnection();
+  const connection = await pool.connect();
 
   try {
     return await replaceStore(connection, store);

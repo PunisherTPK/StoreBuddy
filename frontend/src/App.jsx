@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import storebuddyLogo from "../src/logo2.jpeg";
+import storebuddyLogo2 from "../src/storebuddy_logo2.png";
+
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
-  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon },
   { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"], icon: BoxIcon },
   { id: "suppliers", label: "Suppliers", roles: ["admin", "stock_handler"], icon: TruckIcon },
   { id: "orders", label: "Purchase Orders", roles: ["admin", "stock_handler"], icon: ClipboardIcon },
   { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"], icon: ChartIcon },
   { id: "users", label: "Users", roles: ["admin"], icon: UsersIcon },
-  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon }
+  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon },
+  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon }
 ];
 
 const demoAccounts = [
@@ -39,7 +43,7 @@ function currency(value) {
 }
 
 async function api(path, options = {}, token) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -110,8 +114,10 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem("storebuddy-sidebar-collapsed") === "true");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "light");
-  const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
+  const [themeMode, setThemeMode] = useState("dark");
+  //const [themeMode, setThemeMode] = useState(localStorage.getItem("storebuddy-theme-mode") || "dark");
+  //const [accentTheme, setAccentTheme] = useState(localStorage.getItem("storebuddy-accent-theme") || "blue");
+  const [accentTheme, setAccentTheme] = useState("blue");
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [productForm, setProductForm] = useState(emptyProduct());
   const [supplierForm, setSupplierForm] = useState(emptySupplier());
@@ -123,6 +129,7 @@ export default function App() {
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [posNotice, setPosNotice] = useState(null);
+  const isPos = activeTab === "pos";
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
     sales: { key: "createdAt", direction: "desc" },
@@ -668,40 +675,44 @@ export default function App() {
   return (
     <div className="page-shell h-screen overflow-hidden">
       <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          activeTab={activeTab}
-          collapsed={sidebarCollapsed}
-          onClose={() => setSidebarOpen(false)}
-          onSelect={(tabId) => {
-            setActiveTab(tabId);
-            setSidebarOpen(false);
-          }}
-          onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
-          open={sidebarOpen}
-          tabs={roleTabs}
-          user={user}
-        />
-
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <TopBar
-            activeTab={currentTab}
-            accentTheme={accentTheme}
-            error={error}
-            onAccentThemeChange={setAccentTheme}
-            onLogout={logout}
-            onMenu={() => setSidebarOpen(true)}
-            onModeChange={setThemeMode}
-            onSearch={setGlobalSearch}
-            searchConfig={searchConfig}
-            searchValue={globalSearch}
-            themeMenuOpen={themeMenuOpen}
-            themeMenuRef={themeMenuRef}
-            themeMode={themeMode}
-            toggleThemeMenu={() => setThemeMenuOpen((current) => !current)}
+        {!isPos && (
+          <Sidebar
+            activeTab={activeTab}
+            collapsed={sidebarCollapsed}
+            onClose={() => setSidebarOpen(false)}
+            onSelect={(tabId) => {
+              setActiveTab(tabId);
+              setSidebarOpen(false);
+            }}
+            onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
+            open={sidebarOpen}
+            tabs={roleTabs}
             user={user}
           />
+          )}
 
-          <main className="flex-1 overflow-hidden px-4 pb-6 pt-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {!isPos && (
+            <TopBar
+              activeTab={currentTab}
+              accentTheme={accentTheme}
+              error={error}
+              onAccentThemeChange={setAccentTheme}
+              onLogout={logout}
+              onMenu={() => setSidebarOpen(true)}
+              onModeChange={setThemeMode}
+              onSearch={setGlobalSearch}
+              searchConfig={searchConfig}
+              searchValue={globalSearch}
+              themeMenuOpen={themeMenuOpen}
+              themeMenuRef={themeMenuRef}
+              themeMode={themeMode}
+              toggleThemeMenu={() => setThemeMenuOpen((current) => !current)}
+              user={user}
+            />
+          )}
+
+          <main className={`flex-1 overflow-hidden ${isPos? "p-4": "px-4 pb-6 pt-4 sm:px-6 lg:px-8"}`}>         
             <div className="flex h-full min-h-0 flex-col gap-6">
               {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
 
@@ -753,19 +764,27 @@ export default function App() {
                 ) : null}
 
                 {activeTab === "pos" ? (
-                  <PosScreen
-                    barcodeInputRef={barcodeInputRef}
-                    busyKey={busyKey}
-                    cart={cart}
-                    onAddToCart={(product) => addToCart(cart, setCart, product)}
-                    onBarcodeSubmit={handlePosBarcodeSubmit}
-                    onCheckout={createSale}
-                    onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
-                    posNotice={posNotice}
-                    products={filteredProducts}
-                    searchValue={globalSearch}
-                    setSearchValue={setGlobalSearch}
-                  />
+                  <div className="h-full">
+                    <PosTopBar
+                      logoSrc={storebuddyLogo}
+                      onExit={() => setActiveTab("dashboard")}
+                      user={user.name}
+                    />
+                    <PosScreen
+                      barcodeInputRef={barcodeInputRef}
+                      busyKey={busyKey}
+                      cart={cart}
+                      onAddToCart={(product) => addToCart(cart, setCart, product)}
+                      onBarcodeSubmit={handlePosBarcodeSubmit}
+                      onCheckout={createSale}
+                      onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                      posNotice={posNotice}
+                      products={filteredProducts}
+                      searchValue={globalSearch}
+                      setSearchValue={setGlobalSearch}
+                      onExit={() => setActiveTab("dashboard")}
+                    />
+                  </div>
                 ) : null}
 
                 {activeTab === "reports" ? (
@@ -852,64 +871,291 @@ export default function App() {
 }
 
 function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
+
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.2fr_460px]">
-      <div className="relative hidden overflow-hidden px-10 py-12 text-white lg:block" style={{ background: "var(--hero-bg)" }}>
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
-        <div className="relative flex h-full flex-col justify-between">
-          <div className="space-y-6">
-            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/90">
-              StoreBuddy
-            </span>
-            <div className="max-w-2xl space-y-4">
-              <h1 className="text-5xl font-semibold leading-[1.02] tracking-tight">
-                A premium retail workspace with sharper hierarchy and faster daily flows.
+    <main className="min-h-screen flex flex-col md:flex-row relative" style={{ backgroundColor: "var(--app-bg)", color: "var(--text-strong)" }}>
+      {/* Left Side: Content & Branding */}
+      <section className="hidden md:flex md:w-1/2 flex-col justify-center p-8 lg:p-12 relative overflow-hidden" style={{ 
+        background: "linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.08)), linear-gradient(180deg, #0f1f35, #1a2d4d)"
+      }}>
+        
+        <div className="animated-glow glow-1" />
+        <div className="animated-glow glow-2" />
+        <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+          <div className="mb-8 flex items-center justify-left gap-6">
+            <img
+              src={storebuddyLogo}
+              alt="StoreBuddy Logo"
+              className="h-25 w-25 object-contain"
+            />
+
+            <div className="leading-tight">
+              <h1
+                className="text-5xl font-bold"
+                style={{ color: "var(--text-strong)" }}
+              >
+                <span style={{ color: "var(--text-strong)" }}>Store</span>
+                <span style={{ color: "var(--accent-600)" }}>Buddy</span>
               </h1>
-              <p className="max-w-xl text-lg text-white/72">
-                Inventory, POS, suppliers, purchase orders, reporting, backup, and theme customization in one polished local-first dashboard.
+
+              <p 
+                className="text-sm font-medium"
+                style={{ color: "var(--text-faint)", whiteSpace: 'pre-wrap' }}
+              >
+                Inventory   •   Billing   •   Growth
               </p>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {demoAccounts.map((account) => (
-              <div key={account.username} className="rounded-[24px] border border-white/12 bg-white/8 p-4 backdrop-blur-xl">
-                <p className="text-sm font-semibold text-white">{account.role}</p>
-                <p className="mt-3 text-sm text-white/68">{account.username}</p>
-                <p className="text-sm text-white/88">{account.password}</p>
+          <header className="space-y-4">
+            <h1 className="text-5xl leading-tight font-extrabold tracking-tight" style={{ color: "#ffffff" }}>
+              Manage Your Store <span style={{ color: "var(--accent-500)" }}>Smarter.</span>
+            </h1>
+            <p className="text-lg leading-relaxed max-w-xl" style={{ color: "rgba(255, 255, 255, 0.9)" }}>
+              Track inventory, manage suppliers, generate invoices, monitor stock levels, and grow your business with one powerful platform.
+            </p>
+          </header>
+
+          {/* Feature Grid */}
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            {[
+              { icon: "📦", label: "Smart Inventory" },
+              { icon: "💳", label: "Fast POS Billing" },
+              { icon: "🤝", label: "Supplier Management" },
+              { icon: "📊", label: "Reports & Analytics" }
+            ].map((feature, idx) => (
+              <div key={idx} className="p-4 bg-white/10 border border-white/20 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 backdrop-blur-sm hover:bg-white/15">
+                <div className="text-3xl mb-2">{feature.icon}</div>
+                <h3 className="font-bold text-white text-base">{feature.label}</h3>
               </div>
             ))}
           </div>
+
+          {/* Demo Accounts Info 
+          <div className="pt-6">
+            <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "rgba(255, 255, 255, 0.7)" }}>Demo Accounts</p>
+            <div className="grid gap-3 md:grid-cols-3">
+              {demoAccounts.map((account) => (
+                <div key={account.username} className="rounded-xl border border-white/20 bg-white/8 p-3 backdrop-blur-sm">
+                  <p className="text-xs font-semibold" style={{ color: "#ffffff" }}>{account.role}</p>
+                  <p className="mt-2 text-xs" style={{ color: "rgba(255, 255, 255, 0.85)" }}>{account.username}</p>
+                  <p className="text-xs font-mono" style={{ color: "rgba(255, 255, 255, 0.9)" }}>{account.password}</p>
+                </div>
+              ))}
+            </div>
+          </div> */}
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
-        <form className="card glass-panel w-full max-w-md space-y-6 p-8" onSubmit={onSubmit}>
-          <div className="space-y-2">
-            <span className="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]" style={{ background: "var(--accent-50)", color: "var(--accent-700)" }}>
-              Sign in
-            </span>
-            <h2 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>Welcome back</h2>
-            <p className="text-sm" style={{ color: "var(--text-faint)" }}>Use one of the seeded accounts to enter the dashboard.</p>
+      {/* Right Side: Login Form */}
+      <section className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 relative">
+        {/* Mobile Brand Logo */}
+        <div className="md:hidden absolute top-6 left-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
+            <img src={storebuddyLogo} alt="StoreBuddy logo" className="h-full w-full object-contain" />
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <Field label="Username">
-              <input className="input" defaultValue="admin" name="username" required />
-            </Field>
-            <Field label="Password">
-              <input className="input" defaultValue="admin123" name="password" required type="password" />
-            </Field>
+        <div className="w-full max-w-md">
+          <div className="rounded-3xl border p-6 md:p-8 shadow-lg space-y-6" style={{ 
+            background: "var(--surface-2)", 
+            borderColor: "var(--border-soft)",
+            backdropFilter: "blur(24px)"
+          }}>
+            <header className="text-center space-y-2">
+              <div className="flex justify-center mb-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl overflow-hidden border border-white/20 bg-white/80 shadow-sm backdrop-blur-sm">
+                  <img src={storebuddyLogo} alt="StoreBuddy logo" className="h-full w-full object-contain" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-extrabold" style={{ color: "var(--text-strong)" }}>Welcome Back</h2>
+              <p className="text-sm" style={{ color: "var(--text-faint)" }}>Sign in to continue managing your business</p>
+            </header>
+
+            <form className="space-y-4" onSubmit={onSubmit}>
+              {/* Username Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold block ml-1" style={{ color: "var(--text-soft)" }} htmlFor="username">
+                  Username
+                </label>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>👤</span>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    defaultValue=""
+                    placeholder=""
+                    required
+                    className="w-full pl-12 pr-4 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
+                    style={{
+                      backgroundColor: "var(--surface-3)",
+                      borderColor: "var(--border-soft)",
+                      color: "var(--text-strong)"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "var(--accent-500)"}
+                    onBlur={(e) => e.target.style.borderColor = "var(--border-soft)"}
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-sm font-semibold" style={{ color: "var(--text-soft)" }} htmlFor="password">
+                    Password
+                  </label>
+                  {/*<a className="text-sm font-bold hover:underline transition-all" style={{ color: "var(--accent-600)" }} href="#">
+                    Forgot Password?
+                  </a> */}
+                </div>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg" style={{ color: "var(--text-faint)" }}>🔒</span>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    defaultValue=""
+                    placeholder=""
+                    required
+                    className="w-full pl-12 pr-12 py-3 rounded-xl font-base focus:ring-4 outline-none transition-all border"
+                    style={{
+                      backgroundColor: "var(--surface-3)",
+                      borderColor: "var(--border-soft)",
+                      color: "var(--text-strong)"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "var(--accent-500)"}
+                    onBlur={(e) => e.target.style.borderColor = "var(--border-soft)"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "var(--text-faint)" }}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me 
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                  style={{ accentColor: "var(--accent-600)" }}
+                />
+                <label className="text-sm cursor-pointer select-none" style={{ color: "var(--text-faint)" }} htmlFor="remember">
+                  Remember this device
+                </label>
+              </div>
+              */}
+              {/* Error Alert */}
+              {error && (
+                <div className="p-4 rounded-lg border" style={{ 
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  borderColor: "rgba(239, 68, 68, 0.3)",
+                  color: "#dc2626"
+                }}>
+                  <p className="text-sm font-semibold">{error}</p>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 rounded-xl font-bold text-white text-base shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                style={{ 
+                  background: "linear-gradient(135deg, var(--accent-600), var(--accent-700))",
+                  boxShadow: "0 8px 16px rgba(var(--accent-rgb), 0.3)"
+                }}
+              >
+                {loading ? "Signing in..." : "Login to StoreBuddy"}
+              </button>
+              {/*
+              {/* Divider 
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
+                <span className="flex-shrink mx-3 text-xs" style={{ color: "var(--text-soft)" }}>OR</span>
+                <div className="flex-grow border-t" style={{ borderColor: "var(--border-soft)" }}></div>
+              </div>
+              
+              {/* Demo Button 
+              <button
+                type="button"
+                onClick={() => {
+                  const form = event?.target?.closest("form");
+                  if (form) {
+                    form.dispatchEvent(new Event("submit", { bubbles: true }));
+                  }
+                }}
+                className="w-full py-3 rounded-xl font-bold text-base border transition-all duration-200 flex items-center justify-center gap-2"
+                style={{
+                  borderColor: "var(--border-soft)",
+                  color: "var(--accent-600)",
+                  backgroundColor: "var(--surface-3)"
+                }}
+              >
+                ⚡ Continue as Demo
+              </button>
+              */}
+            </form>
+            {/*
+            <footer className="text-center pt-2">
+              <p className="text-sm" style={{ color: "var(--text-faint)" }}>
+                Don't have an account? <a className="font-bold hover:underline" style={{ color: "var(--accent-600)" }} href="#">Get Started Free</a>
+              </p>
+            </footer>
+            */}
           </div>
+        </div>
 
-          {error ? <Alert tone="error">{error}</Alert> : null}
+        {/* Global Footer */}
+        <footer className="absolute bottom-10 w-full text-center px-4">
+          <p className="text-xs" style={{ color: "var(--text-faint)", opacity: 0.6 }}>
+            © 2026 StoreBuddy. Built for Small Retail Businesses.
+          </p>
+        </footer>
+      </section>
 
-          <button className="btn-primary w-full" disabled={loading} type="submit">
-            {loading ? "Signing in..." : "Enter dashboard"}
-          </button>
-        </form>
-      </div>
-    </div>
+      <style>{`
+        .animated-glow {
+          position: absolute;
+          width: 600px;
+          height: 600px;
+          border-radius: 50%;
+          filter: blur(120px);
+          z-index: 0;
+          opacity: 0.15;
+          pointer-events: none;
+        }
+
+        .glow-1 {
+          background: radial-gradient(circle, rgba(var(--accent-rgb), 1) 0%, transparent 70%);
+          top: -200px;
+          left: -100px;
+          animation: drift 15s infinite alternate ease-in-out;
+        }
+
+        .glow-2 {
+          background: radial-gradient(circle, rgba(var(--accent-rgb), 0.6) 0%, transparent 70%);
+          bottom: -200px;
+          right: -100px;
+          animation: drift 20s infinite alternate-reverse ease-in-out;
+        }
+
+        @keyframes drift {
+          from { transform: translate(0, 0); }
+          to { transform: translate(100px, 100px); }
+        }
+      `}</style>
+    </main>
   );
 }
 
@@ -930,15 +1176,17 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
           <div className={`mb-6 ${collapsed ? "flex flex-col items-center gap-4" : "flex items-start justify-between"}`}>
             <div className={collapsed ? "flex flex-col items-center" : ""}>
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-                  <StoreIcon />
+                <div className={collapsed ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm": "flex h-40 w-40 items-center justify-center rounded-2xl text-white shadow-sm"} style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
+                  <img src={storebuddyLogo2} alt="StoreBuddy Logo" className="h-250 w-250 object-contain"></img>
                 </div>
+                {/* Storebuddy in text 
                 <div className={collapsed ? "hidden" : "block"}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>StoreBuddy</p>
-                  <h1 className="text-lg font-semibold" style={{ color: "var(--text-strong)" }}>Retail OS</h1>
+                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>Store</h1>
+                  <h1 className="text-s font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent-700)" }}>Buddy</h1>
                 </div>
+                */}
               </div>
-              <div className={`mt-5 rounded-[22px] p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
+              <div className={`mt-5 rounded-[22px] p-1 ${collapsed ? "hidden" : "block"}`} style={{ background: "rgba(var(--accent-rgb), 0.08)" }}>
                 <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
                 <p className="text-sm capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
               </div>
@@ -976,16 +1224,119 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
               );
             })}
           </nav>
-
-          <div className={`mt-auto rounded-[24px] border p-4 ${collapsed ? "hidden" : "block"}`} style={{ background: "var(--surface-3)", borderColor: "var(--border-soft)" }}>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>Local-first workflow</p>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Built for fast billing, quick stock checks, and clean daily operations.</p>
-          </div>
         </div>
       </aside>
     </>
   );
 }
+
+function PosTopBar({
+  user,
+  onExit,
+  logoSrc
+}) {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <header
+      className="mb-4 flex flex-col gap-4 rounded-2xl border px-4 shadow-lg md:flex-row md:items-center md:justify-between z-10"
+      style={{
+        backgroundColor: "#08101d",
+        borderColor: "#000000"
+      }}
+    >
+      {/* Left */}
+      <div className="flex items-center gap-4">
+        <img
+          src={logoSrc}
+          alt="StoreBuddy"
+          className="h-20 w-20 rounded-xl object-contain"
+        />
+
+        <div>
+          <h1
+            className="text-xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            StoreBuddy POS
+          </h1>
+
+          <p
+            className="text-sm"
+            style={{ color: "var(--text-faint)" }}
+          >
+            Point of Sale
+          </p>
+        </div>
+      </div>
+
+      {/* Center */}
+      <div className="flex items-center gap-6">
+        <div
+          className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold"
+          style={{
+            backgroundColor: "#10b98120",
+            color: "#10b981"
+          }}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          ONLINE
+        </div>
+
+        <div
+          className="text-sm font-medium"
+          style={{ color: "var(--text-primary)" }}
+        >
+          👤 {user}
+        </div>
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-60">
+        <div className="text-right">
+          <div
+            className="text-lg font-semibold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {time.toLocaleTimeString()}
+          </div>
+
+          <div
+            className="text-sm"
+            style={{ color: "var(--text-faint)" }}
+          >
+            {time.toLocaleDateString(undefined, {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })}
+          </div>
+        </div>
+
+        <button
+          className="btn-secondary"
+          onClick={onExit}
+          type="button"
+        >
+          Exit POS
+        </button>
+      </div>
+    </header>
+  );
+}
+
+
+
+
 
 function TopBar({
   accentTheme,
@@ -1038,6 +1389,7 @@ function TopBar({
               <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>{user.name}</p>
               <p className="text-xs capitalize" style={{ color: "var(--text-faint)" }}>{user.role.replace("_", " ")}</p>
             </div>
+            {/*
             <div className="relative" ref={themeMenuRef}>
               <button className="btn-secondary" onClick={toggleThemeMenu} type="button">
                 <PaletteIcon />
@@ -1053,6 +1405,7 @@ function TopBar({
                 />
               ) : null}
             </div>
+            */}
             <button className="btn-secondary" onClick={onLogout} type="button">
               Sign out
             </button>
@@ -1393,14 +1746,15 @@ function PosScreen({
   posNotice,
   products,
   searchValue,
-  setSearchValue
+  setSearchValue,
+  onExit
 }) {
   const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
   return (
     <section className="grid h-full min-h-0 gap-6 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
-      <div className="grid gap-6 xl:h-[calc(100vh-11.5rem)] xl:grid-rows-[auto_minmax(0,1fr)_auto]">
-        <SectionCard subtitle="Built for fast keyboard and scan-based product lookup." title="Scan or Search">
+      <div className="flex h-full flex-col gap-4 min-h-0">
+        <SectionCard title="Scan or Search"> 
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1431,23 +1785,36 @@ function PosScreen({
             >
               {posNotice.text}
             </div>
-          ) : (
-            <p className="mt-3 text-sm" style={{ color: "var(--text-faint)" }}>
-              Enter an exact barcode and press Enter to add the item instantly.
-            </p>
-          )}
+          ) : null}
         </SectionCard>
-
-        <SectionCard
-          className="h-full min-h-0"
-          contentClassName="h-full min-h-0 overflow-y-auto pr-1"
-          subtitle="Large product targets for faster billing under pressure."
+        
+        <SectionCard 
+          className="h-50 flex-1 flex-col min-h-0"
+          contentClassName=" overflow-y-auto pr-7 min-h-0 pt-1"
           title="Products"
         >
-          <div>
+          <div >
             {products.length ? (
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-3 2xl:grid-cols-3">
                 {products.map((product) => (
+
+                  <button className="card rounded-2xl border border-slate-200 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md" key={product.id} onClick={() => onAddToCart(product)} type="button">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.barcode || product.sku || "No code"}</p>
+                      </div>
+
+                      <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
+                        {product.stock}
+                      </StatusPill>
+                    </div>
+
+                    <div className="mt-2 flex items-end justify-between">
+                      <p className="text-lg font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
+                    </div>
+                  </button>
+                  /* This is a large button
                   <button
                     className="card rounded-3xl border border-slate-200 p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
                     key={product.id}
@@ -1463,11 +1830,11 @@ function PosScreen({
                         {product.stock}
                       </StatusPill>
                     </div>
-                    <div className="mt-6 flex items-end justify-between">
+                    <div className="mt-4 flex items-end justify-between">
                       <p className="text-2xl font-semibold tracking-tight text-blue-600">{currency(product.price)}</p>
-                      <span className="text-sm text-slate-400">Tap to add</span>
                     </div>
                   </button>
+                  */
                 ))}
               </div>
             ) : (
@@ -1479,7 +1846,7 @@ function PosScreen({
           </div>
         </SectionCard>
 
-        <div className="rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
+        <div className="mt-auto rounded-[28px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-end justify-between gap-4 md:min-w-[280px]">
               <div>
@@ -1496,7 +1863,7 @@ function PosScreen({
               onClick={onCheckout}
               type="button"
             >
-              {busyKey === "create-sale" ? "Completing sale..." : "Complete sale"}
+              {busyKey === "create-sale" ? "Completing sale..." : "Checkout"}
             </button>
           </div>
         </div>
@@ -1504,8 +1871,8 @@ function PosScreen({
 
       <SectionCard
         className="h-full min-h-0"
-        contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
-        subtitle="Readable bill, bigger totals, and faster quantity control."
+        contentClassName=" flex-1 overflow-y-auto pr-1"
+        subtitle=""
         title="Current Bill"
       >
         <div className="space-y-3">
@@ -1537,7 +1904,10 @@ function PosScreen({
           )}
         </div>
       </SectionCard>
+      <div className="h-22" mt-auto></div>
     </section>
+    
+    
   );
 }
 

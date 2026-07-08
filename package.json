@@ -7,11 +7,17 @@
     "frontend"
   ],
   "scripts": {
-    "install:all": "npm install --workspaces",
-    "dev": "npm run dev --workspace backend",
+    "installall": "npm install --workspaces",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
     "build": "npm run build --workspace frontend",
     "start": "npm run start --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }
