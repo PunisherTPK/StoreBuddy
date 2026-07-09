@@ -1,42 +1,42 @@
-import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
-const SECRET = "storebuddy-local-secret";
+const SECRET =
+  process.env.JWT_SECRET ||
+  "StoreBuddy_2026_SuperSecure_Key_9f7a2b8d!";
 
-export function hashPassword(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
+
+
+/**
+ * Hash a password before storing it.
+ */
+export async function hashPassword(password) {
+  return await bcrypt.hash(password, 10);
 }
 
+/**
+ * Compare a plain password with its hash.
+ */
+export async function verifyPassword(password, hash) {
+  return await bcrypt.compare(password, hash);
+}
+
+/**
+ * Generate JWT
+ */
 export function createToken(payload) {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", SECRET)
-    .update(body)
-    .digest("base64url");
-
-  return `${body}.${signature}`;
+  return jwt.sign(payload, SECRET, {
+    expiresIn: "8h",
+    issuer: "StoreBuddy"
+  });
 }
 
+/**
+ * Verify JWT
+ */
 export function verifyToken(token) {
-  if (!token) {
-    return null;
-  }
-
-  const [body, signature] = token.split(".");
-  if (!body || !signature) {
-    return null;
-  }
-
-  const expected = crypto
-    .createHmac("sha256", SECRET)
-    .update(body)
-    .digest("base64url");
-
-  if (expected !== signature) {
-    return null;
-  }
-
   try {
-    return JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    return jwt.verify(token, SECRET);
   } catch {
     return null;
   }

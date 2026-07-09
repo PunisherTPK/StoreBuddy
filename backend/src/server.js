@@ -4,7 +4,15 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createToken, hashPassword, verifyToken } from "./auth.js";
+
+import {
+  createToken,
+  hashPassword,
+  verifyPassword,
+  verifyToken
+} from "./auth.js";
+
+
 import { generateId, readStore, withStore, writeStore } from "./storeProvider.js";
 
 
@@ -96,9 +104,16 @@ app.post("/api/auth/login", async (req, res) => {
   const store = await readStore();
   const user = store.users.find((entry) => entry.username === username && entry.active);
 
-  if (!user || user.passwordHash !== hashPassword(password)) {
-    return res.status(401).json({ message: "Invalid username or password." });
+  if (!user) {
+    return res.status(401).json({ message: "Invalid username." });
   }
+
+  const validPassword = await verifyPassword(password, user.passwordHash);
+
+  if (!validPassword) {
+    return res.status(401).json({ message: "Invalid password." });
+  }
+  
 
   const safeUser = sanitizeUser(user);
   const token = createToken({
@@ -433,7 +448,7 @@ app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
     name: req.body.name,
     username: req.body.username,
     role: req.body.role,
-    passwordHash: hashPassword(req.body.password || "changeme123"),
+    passwordHash: await hashPassword(req.body.password || "changeme123"),
     active: req.body.active ?? true
   };
 
@@ -446,6 +461,10 @@ app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
 });
 
 app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) => {
+  const hashedPassword = req.body.password
+    ? await hashPassword(req.body.password)
+    : null;
+
   const store = await withStore(async (draft) => {
     draft.users = draft.users.map((user) => {
       if (user.id !== req.params.id) {
@@ -455,14 +474,16 @@ app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) =>
       return {
         ...user,
         ...req.body,
-        passwordHash: req.body.password ? hashPassword(req.body.password) : user.passwordHash
+        passwordHash: hashedPassword ?? user.passwordHash
       };
     });
+
     return draft;
   });
 
   res.json(store.users.map(sanitizeUser));
 });
+
 
 app.get("/api/backup/export", authRequired, allowRoles("admin"), async (_req, res) => {
   const store = await readStore();

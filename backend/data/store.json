@@ -11,7 +11,7 @@
       "name": "Admin User",
       "username": "admin",
       "role": "admin",
-      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "passwordHash": "$2b$10$QdEyUU5GtPPEFUfJ9Ukpre/xMzZ6a.fqmrjOt2Gdhvx9/H6qeEn3C",
       "active": true
     },
     {
@@ -19,7 +19,7 @@
       "name": "Cashier One",
       "username": "cashier",
       "role": "cashier",
-      "passwordHash": "b4c94003c562bb0d89535eca77f07284fe560fd48a7cc1ed99f0a56263d616ba",
+      "passwordHash": "$2b$10$JWnvfJrhFNuJckJioGcDKOOGyAnvSXOFJ6Ut5It3OnYTQnsNvAkFi",
       "active": true
     },
     {
@@ -27,7 +27,7 @@
       "name": "Stock Handler",
       "username": "stock",
       "role": "stock_handler",
-      "passwordHash": "2865dd81e909d7ddaa85076b6187102140e01fe48fd203f1d7a73b0b515fbac5",
+      "passwordHash": "$2b$10$DGcOzjSm/9PX4dKxZD6YE.khH8Bqso0aK6UNfuOYaHGHF8xamIrta",
       "active": true
     }
   ],
