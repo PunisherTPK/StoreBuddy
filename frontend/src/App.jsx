@@ -140,7 +140,8 @@ export default function App() {
   });
   const [toasts, setToasts] = useState([]);
 
-
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
   const barcodeInputRef = useRef(null);
   const themeMenuRef = useRef(null);
 
@@ -410,6 +411,29 @@ export default function App() {
     localStorage.removeItem("storebuddy-token");
   }
 
+  async function saveCategory(id) {
+      const next = await api(
+          `/api/categories/${id}`,
+          {
+              method: "PUT",
+              body: JSON.stringify({
+                  name: editingCategoryName
+              })
+          },
+          token
+      );
+
+      setBoot(current => ({
+          ...current,
+          categories: next
+      }));
+
+      setEditingCategoryId(null);
+      flash("Category updated.");
+  }
+
+
+
   async function saveProduct(event) {
     event.preventDefault();
     await runAction("save-product", async () => {
@@ -456,6 +480,27 @@ async function deleteProduct(product) {
         flash("Product deleted.");
     });
 }
+
+async function deleteCategory(category) {
+    await runAction("delete-category", async () => {
+
+        const next = await api(
+            `/api/categories/${category.id}`,
+            {
+                method: "DELETE"
+            },
+            token
+        );
+
+        setBoot(current => ({
+            ...current,
+            categories: next
+        }));
+
+        flash("Category deleted.");
+    });
+}
+
 
 async function deleteSupplier(supplier) {
     await runAction("delete-supplier", async () => {
@@ -797,11 +842,17 @@ async function deleteSupplier(supplier) {
                       onAddCategory={addCategory}
                       onEditProduct={openEditProductModal}
                       onDeleteProduct={deleteProduct}
+                      onDeleteCategory={deleteCategory}
                       setDeleteDialog={setDeleteDialog}
                       onNewProduct={openNewProductModal}
                       onSort={onSort}
                       products={sortedProducts}
                       sortConfig={sortConfig.products}
+                      editingCategoryId={editingCategoryId}
+                      setEditingCategoryId={setEditingCategoryId}
+                      editingCategoryName={editingCategoryName}
+                      setEditingCategoryName={setEditingCategoryName}
+                      saveCategory={saveCategory}
                     />
                   </ScreenScrollArea>
                 ) : null}
@@ -1612,7 +1663,24 @@ function DashboardScreen({ products, sales, summary }) {
   );
 }
 
-function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onDeleteProduct, setDeleteDialog, onNewProduct, onSort, products, sortConfig }) {
+function InventoryScreen({ busy, 
+  categories, 
+  suppliers, 
+  onAddCategory, 
+  onEditProduct, 
+  onDeleteProduct, 
+  setDeleteDialog, 
+  onNewProduct, 
+  onSort, 
+  products, 
+  sortConfig,
+  onDeleteCategory,    
+  editingCategoryId,
+  editingCategoryName,
+  setEditingCategoryId,
+  setEditingCategoryName,
+  saveCategory,  }) 
+  {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
@@ -1814,12 +1882,7 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
             >
                 Clear Filters
             </button>
-            <button
-                onClick={onNewProduct}
-                className="btn-primary h-11"
-            >
-                + New Product
-            </button>
+
 
         </div>
       </section>
@@ -1918,12 +1981,13 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
           />
         </SectionCard>
 
-        <SectionCard subtitle="Quick category chips and one-step category creation." title="Categories">
+        <SectionCard title="Categories">
           <InlineAdd
             busy={busy === "add-category"}
             onSubmit={onAddCategory}
             placeholder="Add category"
           />
+          {/*}
           <div className="mt-4 flex flex-wrap gap-2">
             {categories.map((category) => (
               <span
@@ -1932,6 +1996,119 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
               >
                 {category.name}
               </span>
+            ))}
+          </div>
+          */}
+          <div className="mt-4 space-y-3">
+            {categories.map((category) => (
+              <div
+                key={category.id}
+                className="flex items-center justify-between rounded-2xl border p-4 transition hover:shadow-md"
+                style={{
+                  background: "var(--surface-3)",
+                  borderColor: "var(--border-soft)"
+                }}
+              >
+                <div>
+                  {/*}
+                  <h4
+                    className="font-semibold"
+                    style={{ color: "var(--text-strong)" }}
+                  >
+                    {category.name}
+                  </h4>*/}
+                  {editingCategoryId === category.id ? (
+                    <input
+                        value={editingCategoryName}
+                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                        autoFocus
+                        className="rounded-lg border px-3 py-1 text-sm"
+                        style={{
+                            background: "var(--surface-2)",
+                            borderColor: "var(--border-soft)",
+                            color: "var(--text-strong)"
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                saveCategory(category.id);
+                            }
+
+                            if (e.key === "Escape") {
+                                setEditingCategoryId(null);
+                                setEditingCategoryName("");
+                            }
+                        }}
+                    />
+                  ) : (
+                      <h4>{category.name}</h4>
+                  )}
+
+                </div>
+                <div className="flex gap-2">
+
+                  {editingCategoryId === category.id ? (
+                    <>
+                      <button
+                        type="button"
+                        title="Save"
+                        onClick={() => saveCategory(category.id)}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl
+                                  bg-green-500/10 text-green-500
+                                  hover:bg-green-500 hover:text-white"
+                      >
+                        <CheckIcon />
+                      </button>
+
+                      <button
+                        type="button"
+                        title="Cancel"
+                        onClick={() => {
+                          setEditingCategoryId(null);
+                          setEditingCategoryName("");
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl
+                                  bg-gray-500/10 text-gray-500
+                                  hover:bg-gray-500 hover:text-white"
+                      >
+                        <CloseIcon />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        title="Edit"
+                        onClick={() => {
+                          setEditingCategoryId(category.id);
+                          setEditingCategoryName(category.name);
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl
+                                  bg-sky-500/10 text-sky-500
+                                  hover:bg-sky-500 hover:text-white"
+                      >
+                        <PencilIcon />
+                      </button>
+
+                      <button
+                        type="button"
+                        title="Delete"
+                        onClick={() =>
+                          setDeleteDialog({
+                            type: "category",
+                            data: category
+                          })
+                        }
+                        className="flex h-9 w-9 items-center justify-center rounded-xl
+                                  bg-red-500/10 text-red-500
+                                  hover:bg-red-500 hover:text-white"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  )}
+
+                </div>
+              </div>
             ))}
           </div>
         </SectionCard>

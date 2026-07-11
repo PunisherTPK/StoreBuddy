@@ -21,3 +21,5 @@ export const getSuppliers = store.getSuppliers;
 export const deleteSupplier = store.deleteSupplier;
 export const getUsers = store.getUsers;
 export const deleteUser = store.deleteUser;
+export const getCategories = store.getCategories;
+export const deleteCategory = store.deleteCategory;

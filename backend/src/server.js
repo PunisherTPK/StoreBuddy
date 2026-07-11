@@ -22,7 +22,9 @@ import {
   getSuppliers,
   deleteSupplier,
   getUsers,
-  deleteUser
+  deleteUser,
+  getCategories,
+  deleteCategory
 } from "./storeProvider.js";
 
 
@@ -212,39 +214,34 @@ app.put("/api/categories/:id", authRequired, allowRoles("admin", "stock_handler"
   res.json(store.categories);
 });
 
-app.delete("/api/categories/:id", authRequired, allowRoles("admin"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    const category = draft.categories.find(
-      (category) => category.id === req.params.id
-    );
+app.delete(
+  "/api/categories/:id",
+  authRequired,
+  allowRoles("admin"),
+  async (req, res) => {
 
-    if (!category) {
-      return draft;
-    }
+    const store = await readStore();
 
-    const inUse = draft.products.some(
+    const inUse = store.products.some(
       (product) =>
         product.active &&
         product.categoryId === req.params.id
     );
 
     if (inUse) {
-      throw new Error("This category is assigned to one or more products.");
+      return res.status(400).json({
+        message: "This category is assigned to one or more products."
+      });
     }
 
-    category.active = false;
-    return draft;
-  }).catch((error) => {
-    res.status(400).json({ message: error.message });
-    return null;
-  });
+    await deleteCategory(req.params.id);
 
-  if (!store) {
-    return;
+    const categories = await getCategories();
+
+    res.json(categories);
   }
+);
 
-  res.json(store.categories);
-});
 
 app.get("/api/products", authRequired, async (_req, res) => {
   const store = await readStore();

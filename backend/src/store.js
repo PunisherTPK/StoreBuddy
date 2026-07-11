@@ -789,3 +789,48 @@ export async function deleteUser(id) {
     connection.release();
   }
 }
+
+export async function getCategories() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        id,
+        name,
+        description,
+        active
+      FROM categories
+      WHERE active = TRUE
+      ORDER BY name ASC
+    `);
+
+    return rows.map(category => ({
+      ...category,
+      active: Boolean(category.active)
+    }));
+  } finally {
+    connection.release();
+  }
+}
+
+export async function deleteCategory(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      UPDATE categories
+      SET active = FALSE
+      WHERE id = ?
+      `,
+      [id]
+    );
+  } finally {
+    connection.release();
+  }
+}
