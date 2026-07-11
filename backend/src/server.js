@@ -297,7 +297,8 @@ app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"),
     return draft;
   });
 
-  res.json(store.products);
+  const products = await getProducts();
+  res.json(products);
 });
 
 app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, res) => {
@@ -313,8 +314,10 @@ app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, r
     return draft;
   });
 
-  res.json(store.products);
+  const products = await getProducts();
+  res.json(products);
 });
+
 app.get("/api/suppliers", authRequired, async (_req, res) => {
   const store = await readStore();
   res.json(store.suppliers);

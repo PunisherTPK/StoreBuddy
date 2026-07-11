@@ -131,6 +131,7 @@ export default function App() {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [posNotice, setPosNotice] = useState(null);
   const isPos = activeTab === "pos";
+  const [deleteDialog, setDeleteDialog] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
     sales: { key: "createdAt", direction: "desc" },
@@ -432,7 +433,6 @@ export default function App() {
     });
   }
 async function deleteProduct(product) {
-    if (!window.confirm(`Delete "${product.name}"?`)) return;
 
     await runAction("delete-product", async () => {
         const next = await api(
@@ -759,6 +759,7 @@ async function deleteProduct(product) {
                       onAddCategory={addCategory}
                       onEditProduct={openEditProductModal}
                       onDeleteProduct={deleteProduct}
+                      setDeleteDialog={setDeleteDialog}
                       onNewProduct={openNewProductModal}
                       onSort={onSort}
                       products={sortedProducts}
@@ -894,9 +895,20 @@ async function deleteProduct(product) {
           onSubmit={saveUser}
         />
       </EntityModal>
-
+      {deleteDialog && (
+          <ConfirmDialog
+              title="Delete Product"
+              message={`Are you sure you want to delete "${deleteDialog.name}"?`}
+              onCancel={() => setDeleteDialog(null)}
+              onConfirm={async () => {
+                  await deleteProduct(deleteDialog);
+                  setDeleteDialog(null);
+              }}
+          />
+      )}
       <ToastViewport toasts={toasts} />
     </div>
+
   );
 }
 
@@ -1525,7 +1537,7 @@ function DashboardScreen({ products, sales, summary }) {
   );
 }
 
-function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onDeleteProduct, onNewProduct, onSort, products, sortConfig }) {
+function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onDeleteProduct, setDeleteDialog, onNewProduct, onSort, products, sortConfig }) {
   return (
     <section className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
@@ -1588,7 +1600,7 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
                       title="Delete Product"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDeleteProduct(row);
+                        setDeleteDialog(row);
                       }}
                       className="flex h-9 w-9 items-center justify-center rounded-xl
                                 bg-red-500/10 text-red-500
@@ -2346,6 +2358,71 @@ function EntityModal({ children, onClose, open, subtitle, title }) {
     </div>
   );
 }
+
+function ConfirmDialog({
+    title,
+    message,
+    onCancel,
+    onConfirm
+}) {
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+
+            <div
+                className="w-full max-w-md rounded-3xl border p-6 shadow-2xl"
+                style={{
+                    background: "var(--surface-2)",
+                    borderColor: "var(--border-soft)"
+                }}
+            >
+                <div className="flex justify-center mb-5">
+                    <div
+                        className="flex h-16 w-16 items-center justify-center rounded-full"
+                        style={{
+                            background: "rgba(239,68,68,.12)"
+                        }}
+                    >
+                        <TrashIcon className="h-8 w-8 text-red-500" />
+                    </div>
+                </div>
+
+                <h2
+                    className="text-center text-2xl font-bold"
+                    style={{ color: "var(--text-strong)" }}
+                >
+                    {title}
+                </h2>
+
+                <p
+                    className="mt-3 text-center"
+                    style={{ color: "var(--text-faint)" }}
+                >
+                    {message}
+                </p>
+
+                <div className="mt-8 flex gap-3">
+
+                    <button
+                        className="btn-secondary flex-1"
+                        onClick={onCancel}
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
+                        onClick={onConfirm}
+                    >
+                        Delete
+                    </button>
+
+                </div>
+            </div>
+
+        </div>
+    );
+}
+
 
 function InlineAdd({ busy, onSubmit, placeholder }) {
   const [value, setValue] = useState("");
