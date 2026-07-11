@@ -431,6 +431,32 @@ export default function App() {
       flash(productForm.id ? "Product updated." : "Product added.");
     });
   }
+async function deleteProduct(product) {
+    if (!window.confirm(`Delete "${product.name}"?`)) return;
+
+    await runAction("delete-product", async () => {
+        const next = await api(
+            `/api/products/${product.id}`,
+            {
+                method: "DELETE"
+            },
+            token
+        );
+
+        setBoot(current => ({
+            ...current,
+            products: next,
+            summary: summarizeLocal({
+                ...current,
+                products: next
+            }).summary
+        }));
+
+        flash("Product deleted.");
+    });
+}
+
+
 
   async function saveSupplier(event) {
     event.preventDefault();
@@ -732,6 +758,7 @@ export default function App() {
                       suppliers={boot.suppliers}
                       onAddCategory={addCategory}
                       onEditProduct={openEditProductModal}
+                      onDeleteProduct={deleteProduct}
                       onNewProduct={openNewProductModal}
                       onSort={onSort}
                       products={sortedProducts}
@@ -1498,7 +1525,7 @@ function DashboardScreen({ products, sales, summary }) {
   );
 }
 
-function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onNewProduct, onSort, products, sortConfig }) {
+function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onDeleteProduct, onNewProduct, onSort, products, sortConfig }) {
   return (
     <section className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
@@ -1533,9 +1560,49 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
                   ) : (
                     <StatusPill tone="success">Healthy</StatusPill>
                   )
-              }
+              },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (row) => (
+                  <div className="flex items-center justify-left gap-2">
+                    <button
+                      type="button"
+                      title="Edit Product"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditProduct(row);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-sky-500/10 text-sky-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-sky-500
+                                hover:text-white"
+                    >
+                      <PencilIcon />
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Delete Product"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteProduct(row);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-red-500/10 text-red-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-red-500
+                                hover:text-white"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                )
+              } 
             ]}
-            onRowClick={onEditProduct}
             onSort={(key) => onSort("products", key)}
             rows={products}
             sortConfig={sortConfig}
@@ -2630,6 +2697,43 @@ function BoxIcon() {
       <path d="M12 22V11.5" />
       <path d="M20 6.5 12 11 4 6.5" />
     </>
+  );
+}
+
+function PencilIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
   );
 }
 
