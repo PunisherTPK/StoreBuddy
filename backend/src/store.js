@@ -417,6 +417,7 @@ export async function readStore() {
     const [users] = await connection.query(`
       SELECT id, name, username, password_hash AS passwordHash, role, active
       FROM users
+      where active = TRUE
       ORDER BY name ASC
     `);
 
@@ -733,6 +734,52 @@ export async function deleteSupplier(id) {
     await connection.query(
       `
       UPDATE suppliers
+      SET active = FALSE
+      WHERE id = ?
+      `,
+      [id]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getUsers() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        id,
+        name,
+        username,
+        role,
+        active
+      FROM users
+      WHERE active = TRUE
+      ORDER BY name ASC
+    `);
+
+    return rows.map(user => ({
+      ...user,
+      active: Boolean(user.active)
+    }));
+  } finally {
+    connection.release();
+  }
+}
+
+export async function deleteUser(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      UPDATE users
       SET active = FALSE
       WHERE id = ?
       `,

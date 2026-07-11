@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import storebuddyLogo from "../src/logo2.jpeg";
 import storebuddyLogo2 from "../src/storebuddy_logo2.png";
+import { LogOut } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -571,6 +572,26 @@ async function deleteSupplier(supplier) {
       window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
     });
   }
+  async function deleteUser(user) {
+      await runAction("delete-user", async () => {
+
+          const next = await api(
+              `/api/users/${user.id}`,
+              {
+                  method: "DELETE"
+              },
+              token
+          );
+
+          setBoot(current => ({
+              ...current,
+              users: next
+          }));
+
+          flash("User deleted.");
+      });
+  }
+
 
   async function createPurchaseOrder(event) {
     event.preventDefault();
@@ -850,6 +871,8 @@ async function deleteSupplier(supplier) {
                       onSort={onSort}
                       sortConfig={sortConfig.users}
                       users={sortedUsers}
+                      onDeleteUser={deleteUser}
+                      setDeleteDialog={setDeleteDialog}
                     />
                   </ScreenScrollArea>
                 ) : null}
@@ -1450,7 +1473,7 @@ function TopBar({
           </button>
           <div>
             <h2 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>{activeTab?.label}</h2>
-            <p className="text-sm" style={{ color: "var(--text-faint)" }}>Production-style retail workspace with unchanged business logic underneath.</p>
+            {/* <p className="text-sm" style={{ color: "var(--text-faint)" }}>Production-style retail workspace with unchanged business logic underneath.</p> */}
           </div>
         </div>
 
@@ -1492,7 +1515,13 @@ function TopBar({
               ) : null}
             </div>
             */}
-            <button className="btn-secondary" onClick={onLogout} type="button">
+
+            <button
+              className="btn-secondary group inline-flex items-center gap-2 transition-all duration-200 hover:gap-3 hover:text-red-400"
+              onClick={onLogout}
+              type="button"
+            >
+              <LogOut className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               Sign out
             </button>
           </div>
@@ -2331,7 +2360,7 @@ function ReportsScreen({ boot }) {
   );
 }
 
-function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users }) {
+function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users, onDeleteUser,setDeleteDialog }) {
   return (
     <section className="space-y-6">
       <SectionCard
@@ -2358,9 +2387,53 @@ function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users }) {
               key: "active",
               label: "Status",
               render: (row) => (row.active ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="neutral">Disabled</StatusPill>)
+            },
+            {
+              key: "actions",
+              label: "Actions",
+              render: (row) => (
+                <div className="flex items-center justify-left gap-2">
+                    <button
+                      type="button"
+                      title="Edit Product"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditUser(row);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-sky-500/10 text-sky-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-sky-500
+                                hover:text-white"
+                    >
+                      <PencilIcon />
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Delete User"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteDialog({
+                            type: "user",
+                            data: row
+                        });
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-red-500/10 text-red-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-red-500
+                                hover:text-white"
+                    >
+                      <TrashIcon />
+                    </button>
+                </div>
+              )
             }
           ]}
-          onRowClick={onEditUser}
+          //onRowClick={onEditUser}
           onSort={(key) => onSort("users", key)}
           rows={users}
           sortConfig={sortConfig}

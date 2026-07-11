@@ -19,3 +19,5 @@ export const getProducts = store.getProducts;
 export const createProduct = store.createProduct;
 export const getSuppliers = store.getSuppliers;
 export const deleteSupplier = store.deleteSupplier;
+export const getUsers = store.getUsers;
+export const deleteUser = store.deleteUser;

@@ -20,7 +20,9 @@ import {
   createProduct,
   getProducts,
   getSuppliers,
-  deleteSupplier
+  deleteSupplier,
+  getUsers,
+  deleteUser
 } from "./storeProvider.js";
 
 
@@ -354,6 +356,28 @@ app.put("/api/suppliers/:id", authRequired, allowRoles("admin", "stock_handler")
 
   res.json(store.suppliers);
 });
+
+app.delete(
+  "/api/users/:id",
+  authRequired,
+  allowRoles("admin"),
+  async (req, res) => {
+    {/*
+    // Prevent deleting yourself
+    if (req.user.id === req.params.id) {
+      return res.status(400).json({
+        message: "You cannot delete your own account."
+      });
+    }
+    */}
+
+    await deleteUser(req.params.id);
+
+    const users = await getUsers();
+
+    res.json(users);
+  }
+);
 
 
 app.delete(
