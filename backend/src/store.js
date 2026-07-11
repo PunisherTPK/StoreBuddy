@@ -693,3 +693,52 @@ export async function createProduct(product) {
     connection.release();
   }
 }
+
+export async function getSuppliers() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        id,
+        name,
+        contact_person AS contactPerson,
+        phone,
+        email,
+        address,
+        active
+      FROM suppliers
+      WHERE active = TRUE
+      ORDER BY name ASC
+    `);
+
+    return rows.map((supplier) => ({
+      ...supplier,
+      active: Boolean(supplier.active)
+    }));
+  } finally {
+    connection.release();
+  }
+}
+
+
+export async function deleteSupplier(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      UPDATE suppliers
+      SET active = FALSE
+      WHERE id = ?
+      `,
+      [id]
+    );
+  } finally {
+    connection.release();
+  }
+}

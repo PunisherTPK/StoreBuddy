@@ -373,7 +373,6 @@ export default function App() {
     try {
       await action();
     } catch (actionError) {
-      setError(actionError.message);
       pushToast(actionError.message, "error");
     } finally {
       setBusyKey("");
@@ -457,7 +456,24 @@ async function deleteProduct(product) {
     });
 }
 
+async function deleteSupplier(supplier) {
+    await runAction("delete-supplier", async () => {
+        const next = await api(
+            `/api/suppliers/${supplier.id}`,
+            {
+                method: "DELETE"
+            },
+            token
+        );
 
+        setBoot(current => ({
+            ...current,
+            suppliers: next
+        }));
+
+        flash("Supplier deleted.");
+    });
+}
 
   async function saveSupplier(event) {
     event.preventDefault();
@@ -774,6 +790,8 @@ async function deleteProduct(product) {
                     <SuppliersScreen
                       onEditSupplier={openEditSupplierModal}
                       onNewSupplier={openNewSupplierModal}
+                      onDeleteSupplier={deleteSupplier}
+                      setDeleteDialog={setDeleteDialog}
                       suppliers={filteredSuppliers}
                     />
                   </ScreenScrollArea>
@@ -897,15 +915,40 @@ async function deleteProduct(product) {
         />
       </EntityModal>
       {deleteDialog && (
-          <ConfirmDialog
-              title="Delete Product"
-              message={`Are you sure you want to delete "${deleteDialog.name}"?`}
-              onCancel={() => setDeleteDialog(null)}
-              onConfirm={async () => {
-                  await deleteProduct(deleteDialog);
-                  setDeleteDialog(null);
-              }}
-          />
+        <ConfirmDialog
+            title={`Delete ${
+                deleteDialog.type.charAt(0).toUpperCase() +
+                deleteDialog.type.slice(1)
+            }`}
+            message={`Are you sure you want to delete "${deleteDialog.data.name}"?`}
+            onCancel={() => setDeleteDialog(null)}
+            onConfirm={async () => {
+
+                switch (deleteDialog.type) {
+
+                    case "product":
+                        await deleteProduct(deleteDialog.data);
+                        break;
+
+                    case "supplier":
+                        await deleteSupplier(deleteDialog.data);
+                        break;
+
+                    case "category":
+                        await deleteCategory(deleteDialog.data);
+                        break;
+
+                    case "user":
+                        await deleteUser(deleteDialog.data);
+                        break;
+
+                    default:
+                        break;
+                }
+
+                setDeleteDialog(null);
+            }}
+        />
       )}
       <ToastViewport toasts={toasts} />
     </div>
@@ -1495,7 +1538,9 @@ function DashboardScreen({ products, sales, summary }) {
                     <p className="font-medium text-slate-900">{product.name}</p>
                     <p className="text-sm text-slate-500">Reorder at {product.reorderLevel}</p>
                   </div>
-                  <StatusPill tone="warning">{product.stock} left</StatusPill>
+                  <StatusPill tone={Number(product.stock) === 0 ? "danger" : "warning"}>
+                    {product.stock} left
+                  </StatusPill>
                 </div>
               ))}
             </div>
@@ -1787,11 +1832,14 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
                 key: "status",
                 label: "Status",
                 render: (row) =>
-                  Number(row.stock) <= Number(row.reorderLevel) ? (
+                  Number(row.stock) === 0 ? (
+                    <StatusPill tone="danger">Out of stock</StatusPill>
+                  ) : Number(row.stock) <= Number(row.reorderLevel) ? (
                     <StatusPill tone="warning">Low stock</StatusPill>
                   ) : (
                     <StatusPill tone="success">Healthy</StatusPill>
-                  )
+                  ),
+                  
               },
               {
                 key: "actions",
@@ -1865,7 +1913,7 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
   );
 }
 
-function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers }) {
+function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers, onDeleteSupplier,setDeleteDialog }) {
   return (
     <section className="space-y-6">
       <SectionCard
@@ -1889,6 +1937,23 @@ function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers }) {
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold text-slate-900">{supplier.name}</h3>
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">Supplier</span>
+                  <button
+                    type="button"
+                    title="Delete Supplier"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl
+                              bg-red-500/10 text-red-500 transition-all
+                              hover:scale-105 hover:bg-red-500 hover:text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteDialog({
+                          type: "supplier",
+                          data: supplier
+                        });
+                      }}
+
+                  >
+                    <TrashIcon />
+                  </button>
                 </div>
                 <dl className="mt-4 space-y-2 text-sm text-slate-600">
                   <div className="flex justify-between gap-3">
@@ -2689,7 +2754,8 @@ function StatusPill({ children, tone }) {
   const palette = {
     success: "bg-emerald-500/10 text-emerald-500 border-emerald-300/30",
     warning: "bg-orange-500/10 text-orange-500 border-orange-300/30",
-    neutral: "border text-[var(--text-soft)]"
+    neutral: "border text-[var(--text-soft)]",
+    danger: "bg-red-500/10 text-red-500 border-red-300/30"
   };
 
   return (

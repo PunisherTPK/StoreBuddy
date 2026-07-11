@@ -18,7 +18,9 @@ import {
   withStore,
   writeStore,
   createProduct,
-  getProducts
+  getProducts,
+  getSuppliers,
+  deleteSupplier
 } from "./storeProvider.js";
 
 
@@ -353,40 +355,34 @@ app.put("/api/suppliers/:id", authRequired, allowRoles("admin", "stock_handler")
   res.json(store.suppliers);
 });
 
-app.delete("/api/suppliers/:id", authRequired, allowRoles("admin"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    const supplier = draft.suppliers.find(
-      (supplier) => supplier.id === req.params.id
-    );
 
-    if (!supplier) {
-      return draft;
-    }
+app.delete(
+  "/api/suppliers/:id",
+  authRequired,
+  allowRoles("admin"),
+  async (req, res) => {
 
-    const inUse = draft.products.some(
+    const store = await readStore();
+
+    const inUse = store.products.some(
       (product) =>
         product.active &&
         product.supplierId === req.params.id
     );
 
     if (inUse) {
-      throw new Error("This supplier is assigned to one or more products.");
+      return res.status(400).json({
+        message: "This supplier is assigned to one or more products."
+      });
     }
 
-    supplier.active = false;
+    await deleteSupplier(req.params.id);
 
-    return draft;
-  }).catch((error) => {
-    res.status(400).json({ message: error.message });
-    return null;
-  });
+    const suppliers = await getSuppliers();
 
-  if (!store) {
-    return;
+    res.json(suppliers);
   }
-
-  res.json(store.suppliers);
-});
+);
 
 app.get("/api/purchase-orders", authRequired, async (_req, res) => {
   const store = await readStore();
