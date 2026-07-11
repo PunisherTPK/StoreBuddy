@@ -139,6 +139,7 @@ export default function App() {
   });
   const [toasts, setToasts] = useState([]);
 
+
   const barcodeInputRef = useRef(null);
   const themeMenuRef = useRef(null);
 
@@ -1538,8 +1539,227 @@ function DashboardScreen({ products, sales, summary }) {
 }
 
 function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onDeleteProduct, setDeleteDialog, onNewProduct, onSort, products, sortConfig }) {
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const filteredProducts = products.filter((product) => {
+    const searchText = search.trim().toLowerCase();
+
+    // Search
+    if (
+      searchText &&
+      !(
+        product.name?.toLowerCase().includes(searchText) ||
+        product.barcode?.toLowerCase().includes(searchText) ||
+        product.sku?.toLowerCase().includes(searchText)
+      )
+    ) {
+      return false;
+    }
+
+    // Category
+    if (
+      categoryFilter !== "all" &&
+      String(product.categoryId) !== categoryFilter
+    ) {
+      return false;
+    }
+
+    // Supplier
+    if (
+      supplierFilter !== "all" &&
+      String(product.supplierId) !== supplierFilter
+    ) {
+      return false;
+    }
+
+    // Stock Status
+    switch (stockFilter) {
+      case "healthy":
+        return product.stock > product.reorderLevel;
+
+      case "low":
+        return (
+          product.stock > 0 &&
+          product.stock <= product.reorderLevel
+        );
+
+      case "out":
+        return product.stock === 0;
+
+      default:
+        return true;
+    }
+  });
   return (
     <section className="space-y-6">
+      <section
+        className="rounded-3xl border p-5 shadow-sm"
+        style={{
+            background: "var(--surface-2)",
+            borderColor: "var(--border-soft)"
+        }}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+
+            <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+
+                {/* Search */}
+
+                <div>
+                  {/*
+                      <SearchIcon
+                        className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2"
+                        style={{ color: "var(--text-faint)" }}
+                      />
+                  */}
+                  <label
+                      className="mb-2 block text-sm font-semibold"
+                      style={{ color: "var(--text-soft)" }}
+                  >
+                      Search 
+                  </label>
+
+                  
+
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Name, Barcode or SKU..."
+                        //className="w-full rounded-xl border px-3 py-2"
+                        className="h-10 w-full rounded-xl border pl-10 pr-4"
+                    />
+                </div>
+
+                {/* Category */}
+
+                <div>
+                    <label
+                      className="mb-2 block text-sm font-semibold"
+                      style={{ color: "var(--text-soft)" }}
+                  >
+                        Category
+                    </label>
+
+                    <select
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="w-full rounded-xl border px-3 py-2"
+                        style={{
+                            background: "var(--surface-3)",
+                            color: "var(--text-strong)",
+                            borderColor: "var(--border-soft)"
+                        }}
+                    >
+                        <option value="all">All Categories</option>
+
+                        {categories.map(category => (
+                            <option
+                                key={category.id}
+                                value={category.id}
+                            >
+                                {category.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Supplier */}
+
+                <div>
+                    <label
+                      className="mb-2 block text-sm font-semibold"
+                      style={{ color: "var(--text-soft)" }}
+                  >
+                        Supplier
+                    </label>
+
+                    <select
+                        value={supplierFilter}
+                        onChange={(e) => setSupplierFilter(e.target.value)}
+                        className="w-full rounded-xl border px-3 py-2"
+                        style={{
+                            background: "var(--surface-3)",
+                            color: "var(--text-strong)",
+                            borderColor: "var(--border-soft)"
+                        }}
+                    >
+                        <option value="all">
+                            All Suppliers
+                        </option>
+
+                        {suppliers.map(supplier => (
+                            <option
+                                key={supplier.id}
+                                value={supplier.id}
+                            >
+                                {supplier.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Stock */}
+
+                <div>
+                    <label
+                        className="mb-2 block text-sm font-semibold"
+                        style={{ color: "var(--text-soft)" }}
+                    >
+                        Stock
+                    </label>
+
+                    <select
+                        value={stockFilter}
+                        onChange={(e) => setStockFilter(e.target.value)}
+                        className="w-full rounded-xl border px-3 py-2"
+                        style={{
+                            background: "var(--surface-3)",
+                            color: "var(--text-strong)",
+                            borderColor: "var(--border-soft)"
+                        }}
+                    >
+                        <option value="all">All Stock</option>
+                        <option value="healthy">Healthy</option>
+                        <option value="low">Low Stock</option>
+                        <option value="out">Out of Stock</option>
+                    </select>
+                </div>
+
+            </div>
+            <button
+                onClick={() => {
+                    setSearch("");
+                    setCategoryFilter("all");
+                    setSupplierFilter("all");
+                    setStockFilter("all");
+                }}
+                className="btn-secondary h-11"
+            >
+                Clear Filters
+            </button>
+            <button
+                onClick={onNewProduct}
+                className="btn-primary h-11"
+            >
+                + New Product
+            </button>
+
+        </div>
+      </section>
+      <div
+          className="mb-3 flex items-center justify-between"
+      >
+          <p
+              className="text-sm"
+              style={{ color: "var(--text-faint)" }}
+          >
+              Showing <strong>{filteredProducts.length}</strong> of{" "}
+              <strong>{products.length}</strong> products
+          </p>
+      </div>
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <SectionCard
           action={
@@ -1547,7 +1767,7 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
               Add product
             </button>
           }
-          subtitle="Clean table layout with faster scanning and easier editing."
+          //subtitle="Clean table layout with faster scanning and easier editing."
           title="Products"
         >
           <DataTable
@@ -1616,7 +1836,7 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
               } 
             ]}
             onSort={(key) => onSort("products", key)}
-            rows={products}
+            rows={filteredProducts}
             sortConfig={sortConfig}
           />
         </SectionCard>
@@ -1640,6 +1860,8 @@ function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditPro
         </SectionCard>
       </div>
     </section>
+
+    
   );
 }
 
