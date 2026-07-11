@@ -217,19 +217,20 @@ app.get("/api/products", authRequired, async (_req, res) => {
 
 app.post("/api/products", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
   const product = {
-    id: generateId("prod"),
-    name: req.body.name,
-    barcode: req.body.barcode || "",
-    sku: req.body.sku || "",
-    categoryId: req.body.categoryId || "",
-    price: Number(req.body.price || 0),
-    costPrice: Number(req.body.costPrice || 0),
-    stock: Number(req.body.stock || 0),
-    reorderLevel: Number(req.body.reorderLevel || 0),
-    unit: req.body.unit || "pcs",
-    description: req.body.description || ""
+      id: generateId("prod"),
+      name: req.body.name,
+      barcode: req.body.barcode || "",
+      sku: req.body.sku || "",
+      categoryId: req.body.categoryId || "",
+      supplierId: req.body.supplierId || "",
+      price: Number(req.body.price || 0),
+      costPrice: Number(req.body.costPrice || 0),
+      stock: Number(req.body.stock || 0),
+      reorderLevel: Number(req.body.reorderLevel || 0),
+      unit: req.body.unit || "pcs",
+      description: req.body.description || "",
+      active: true
   };
-
   const store = await withStore(async (draft) => {
     draft.products.unshift(product);
     return draft;
@@ -245,6 +246,11 @@ app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"),
         ? {
             ...product,
             ...req.body,
+
+            categoryId: req.body.categoryId ?? product.categoryId,
+            supplierId: req.body.supplierId ?? product.supplierId,
+            active: product.active,
+
             price: Number(req.body.price ?? product.price),
             costPrice: Number(req.body.costPrice ?? product.costPrice),
             stock: Number(req.body.stock ?? product.stock),

@@ -35,17 +35,20 @@
     {
       "id": "cat-books",
       "name": "Books",
-      "description": "School and office books"
+      "description": "School and office books",
+      "active": true
     },
     {
       "id": "cat-stationery",
       "name": "Stationery",
-      "description": "Daily stationery items"
+      "description": "Daily stationery items",
+      "active": true
     },
     {
       "id": "cat-mobile",
       "name": "Mobile Accessories",
-      "description": "Phone accessories and chargers"
+      "description": "Phone accessories and chargers",
+      "active": true
     }
   ],
   "products": [
@@ -60,7 +63,8 @@
       "stock": 5,
       "reorderLevel": 2,
       "unit": "pcs",
-      "description": "redi bn redi"
+      "description": "redi bn redi",
+      "active": true
     },
     {
       "id": "prod-notebook-a5",
@@ -73,7 +77,8 @@
       "stock": 60,
       "reorderLevel": 12,
       "unit": "pcs",
-      "description": "80-page ruled notebook"
+      "description": "80-page ruled notebook",
+      "active": true
     },
     {
       "id": "prod-blue-pen",
@@ -86,7 +91,8 @@
       "stock": 47,
       "reorderLevel": 15,
       "unit": "pcs",
-      "description": "Smooth-writing pen"
+      "description": "Smooth-writing pen",
+      "active": true
     },
     {
       "id": "prod-usb-cable",
@@ -99,7 +105,8 @@
       "stock": 17,
       "reorderLevel": 5,
       "unit": "pcs",
-      "description": "1m charging cable"
+      "description": "1m charging cable",
+      "active": true
     }
   ],
   "suppliers": [
@@ -109,7 +116,8 @@
       "contactPerson": "Ruwan",
       "phone": "0771234567",
       "email": "metro@example.com",
-      "address": "Kandy Road, Colombo"
+      "address": "Kandy Road, Colombo",
+      "active": true
     },
     {
       "id": "sup-2",
@@ -117,7 +125,8 @@
       "contactPerson": "Nimali",
       "phone": "0717654321",
       "email": "paperline@example.com",
-      "address": "Main Street, Gampaha"
+      "address": "Main Street, Gampaha",
+      "active": true
     }
   ],
   "purchaseOrders": [

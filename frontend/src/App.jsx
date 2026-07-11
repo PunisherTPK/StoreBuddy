@@ -66,6 +66,7 @@ function emptyProduct() {
     barcode: "",
     sku: "",
     categoryId: "",
+    supplierId: "",
     price: 0,
     costPrice: 0,
     stock: 0,
@@ -728,6 +729,7 @@ export default function App() {
                     <InventoryScreen
                       busy={busyKey}
                       categories={boot.categories}
+                      suppliers={boot.suppliers}
                       onAddCategory={addCategory}
                       onEditProduct={openEditProductModal}
                       onNewProduct={openNewProductModal}
@@ -829,11 +831,12 @@ export default function App() {
         onClose={() => setProductModalOpen(false)}
       >
         <ProductForm
-          busy={busyKey === "save-product"}
-          categories={boot.categories}
-          form={productForm}
-          onChange={setProductForm}
-          onSubmit={saveProduct}
+            busy={busyKey === "save-product"}
+            categories={boot.categories}
+            suppliers={boot.suppliers}
+            form={productForm}
+            onChange={setProductForm}
+            onSubmit={saveProduct}
         />
       </EntityModal>
 
@@ -1495,7 +1498,7 @@ function DashboardScreen({ products, sales, summary }) {
   );
 }
 
-function InventoryScreen({ busy, categories, onAddCategory, onEditProduct, onNewProduct, onSort, products, sortConfig }) {
+function InventoryScreen({ busy, categories, suppliers, onAddCategory, onEditProduct, onNewProduct, onSort, products, sortConfig }) {
   return (
     <section className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
@@ -1513,6 +1516,12 @@ function InventoryScreen({ busy, categories, onAddCategory, onEditProduct, onNew
               { key: "name", label: "Product", sortable: true },
               { key: "barcode", label: "Barcode", render: (row) => row.barcode || "-" },
               { key: "sku", label: "SKU", render: (row) => row.sku || "-" },
+              {
+                key: "supplier",
+                label: "Supplier",
+                render: (product) =>
+                  suppliers.find((s) => s.id === product.supplierId)?.name || "-"
+              },
               { key: "price", label: "Price", sortable: true, render: (row) => currency(row.price) },
               { key: "stock", label: "Stock", sortable: true },
               {
@@ -2027,9 +2036,17 @@ function ScreenScrollArea({ children }) {
   return <div className="h-full overflow-y-auto pr-1">{children}</div>;
 }
 
-function ProductForm({ busy, categories, form, onChange, onSubmit }) {
+function ProductForm({ busy, categories,suppliers, form, onChange, onSubmit }) {
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
+    <form
+      className="space-y-4"
+      onSubmit={onSubmit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+        }
+      }}
+    >
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Product name">
           <input className="input" onChange={(event) => onChange({ ...form, name: event.target.value })} required value={form.name} />
@@ -2044,11 +2061,51 @@ function ProductForm({ busy, categories, form, onChange, onSubmit }) {
             ))}
           </select>
         </Field>
+        <Field label="Supplier">
+          <select
+            className="input"
+            value={form.supplierId}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                supplierId: e.target.value
+              })
+            }
+          >
+            <option value="">Select supplier</option>
+
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Barcode">
           <input className="input" onChange={(event) => onChange({ ...form, barcode: event.target.value })} value={form.barcode} />
         </Field>
         <Field label="SKU">
           <input className="input" onChange={(event) => onChange({ ...form, sku: event.target.value })} value={form.sku} />
+        </Field>
+        <Field label="Unit">
+          <select
+            className="input"
+            value={form.unit}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                unit: e.target.value
+              })
+            }
+          >
+            <option value="pcs">Pieces</option>
+            <option value="box">Box</option>
+            <option value="kg">Kilograms</option>
+            <option value="g">Grams</option>
+            <option value="ltr">Litres</option>
+            <option value="ml">Millilitres</option>
+            <option value="pack">Pack</option>
+          </select>
         </Field>
         <Field label="Sell price">
           <input className="input" min="0" onChange={(event) => onChange({ ...form, price: event.target.value })} type="number" value={form.price} />

@@ -91,6 +91,7 @@ async function createSchemaTables(connection) {
     CREATE TABLE IF NOT EXISTS categories (
       id VARCHAR(40) PRIMARY KEY,
       name VARCHAR(120) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
       description TEXT
     )
   `);
@@ -101,7 +102,8 @@ async function createSchemaTables(connection) {
       contact_person VARCHAR(120),
       phone VARCHAR(40),
       email VARCHAR(160),
-      address TEXT
+      address TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE
     )
   `);
   await connection.query(`
@@ -116,8 +118,11 @@ async function createSchemaTables(connection) {
       stock INT NOT NULL DEFAULT 0,
       reorder_level INT NOT NULL DEFAULT 0,
       unit VARCHAR(30) NOT NULL DEFAULT 'pcs',
+      supplier_id VARCHAR(40),
+      active BOOLEAN NOT NULL DEFAULT TRUE,
       description TEXT,
-      CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id)
+      CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id),
+      CONSTRAINT fk_products_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
     )
   `);
   await connection.query(`
@@ -230,18 +235,18 @@ async function replaceStore(connection, store) {
     for (const category of normalized.categories) {
       await connection.query(
         `
-          INSERT INTO categories (id, name, description)
-          VALUES (?, ?, ?)
+          INSERT INTO categories (id, name, description, active)
+          VALUES (?, ?, ?, ?)
         `,
-        [category.id, category.name, category.description || null]
+        [category.id, category.name, category.description || null, Boolean(category.active)]
       );
     }
 
     for (const supplier of normalized.suppliers) {
       await connection.query(
         `
-          INSERT INTO suppliers (id, name, contact_person, phone, email, address)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO suppliers (id, name, contact_person, phone, email, address, active)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
         [
           supplier.id,
@@ -249,7 +254,8 @@ async function replaceStore(connection, store) {
           supplier.contactPerson || null,
           supplier.phone || null,
           supplier.email || null,
-          supplier.address || null
+          supplier.address || null,
+          Boolean(supplier.active)
         ]
       );
     }
@@ -258,12 +264,13 @@ async function replaceStore(connection, store) {
       await connection.query(
         `
           INSERT INTO products
-            (id, category_id, name, sku, barcode, price, cost_price, stock, reorder_level, unit, description)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, category_id, supplier_id, name, sku, barcode, price, cost_price, stock, reorder_level, unit, description, active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           product.id,
           product.categoryId || null,
+          product.supplierId || null,
           product.name,
           product.sku || null,
           product.barcode || null,
@@ -272,7 +279,8 @@ async function replaceStore(connection, store) {
           Number(product.stock || 0),
           Number(product.reorderLevel || 0),
           product.unit || "pcs",
-          product.description || null
+          product.description || null,
+          Boolean(product.active)
         ]
       );
     }
@@ -413,8 +421,13 @@ export async function readStore() {
     `);
 
     const [categories] = await connection.query(`
-      SELECT id, name, description
+      SELECT
+        id,
+        name,
+        description,
+        active
       FROM categories
+      WHERE active = TRUE
       ORDER BY name ASC
     `);
 
@@ -422,6 +435,7 @@ export async function readStore() {
       SELECT
         id,
         category_id AS categoryId,
+        supplier_id AS supplierId,
         name,
         sku,
         barcode,
@@ -430,8 +444,10 @@ export async function readStore() {
         stock,
         reorder_level AS reorderLevel,
         unit,
-        description
+        description,
+        active
       FROM products
+      WHERE active = TRUE
       ORDER BY name ASC
     `);
 
@@ -442,8 +458,10 @@ export async function readStore() {
         contact_person AS contactPerson,
         phone,
         email,
-        address
+        address,
+        active
       FROM suppliers
+      WHERE active = TRUE
       ORDER BY name ASC
     `);
 
@@ -501,11 +519,12 @@ export async function readStore() {
 
 function castProduct(product) {
   return {
-    ...product,
-    price: Number(product.price || 0),
-    costPrice: Number(product.costPrice || 0),
-    stock: Number(product.stock || 0),
-    reorderLevel: Number(product.reorderLevel || 0)
+      ...product,
+      active: Boolean(product.active),
+      price: Number(product.price || 0),
+      costPrice: Number(product.costPrice || 0),
+      stock: Number(product.stock || 0),
+      reorderLevel: Number(product.reorderLevel || 0)
   };
 }
 
