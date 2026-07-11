@@ -12,8 +12,15 @@ import {
   verifyToken
 } from "./auth.js";
 
+import {
+  generateId,
+  readStore,
+  withStore,
+  writeStore,
+  createProduct,
+  getProducts
+} from "./storeProvider.js";
 
-import { generateId, readStore, withStore, writeStore } from "./storeProvider.js";
 
 
 const app = express();
@@ -203,9 +210,34 @@ app.put("/api/categories/:id", authRequired, allowRoles("admin", "stock_handler"
 
 app.delete("/api/categories/:id", authRequired, allowRoles("admin"), async (req, res) => {
   const store = await withStore(async (draft) => {
-    draft.categories = draft.categories.filter((category) => category.id !== req.params.id);
+    const category = draft.categories.find(
+      (category) => category.id === req.params.id
+    );
+
+    if (!category) {
+      return draft;
+    }
+
+    const inUse = draft.products.some(
+      (product) =>
+        product.active &&
+        product.categoryId === req.params.id
+    );
+
+    if (inUse) {
+      throw new Error("This category is assigned to one or more products.");
+    }
+
+    category.active = false;
     return draft;
+  }).catch((error) => {
+    res.status(400).json({ message: error.message });
+    return null;
   });
+
+  if (!store) {
+    return;
+  }
 
   res.json(store.categories);
 });
@@ -215,8 +247,12 @@ app.get("/api/products", authRequired, async (_req, res) => {
   res.json(store.products);
 });
 
-app.post("/api/products", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
-  const product = {
+app.post(
+  "/api/products",
+  authRequired,
+  allowRoles("admin", "stock_handler"),
+  async (req, res) => {
+    const product = {
       id: generateId("prod"),
       name: req.body.name,
       barcode: req.body.barcode || "",
@@ -228,16 +264,16 @@ app.post("/api/products", authRequired, allowRoles("admin", "stock_handler"), as
       stock: Number(req.body.stock || 0),
       reorderLevel: Number(req.body.reorderLevel || 0),
       unit: req.body.unit || "pcs",
-      description: req.body.description || "",
-      active: true
-  };
-  const store = await withStore(async (draft) => {
-    draft.products.unshift(product);
-    return draft;
-  });
+      description: req.body.description || ""
+    };
 
-  res.status(201).json(store.products);
-});
+    await createProduct(product);
+
+    const products = await getProducts();
+
+    res.status(201).json(products);
+  }
+);
 
 app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
   const store = await withStore(async (draft) => {
@@ -266,13 +302,19 @@ app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"),
 
 app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, res) => {
   const store = await withStore(async (draft) => {
-    draft.products = draft.products.filter((product) => product.id !== req.params.id);
+    const product = draft.products.find(
+      (product) => product.id === req.params.id
+    );
+
+    if (product) {
+      product.active = false;
+    }
+
     return draft;
   });
 
   res.json(store.products);
 });
-
 app.get("/api/suppliers", authRequired, async (_req, res) => {
   const store = await readStore();
   res.json(store.suppliers);
@@ -285,7 +327,8 @@ app.post("/api/suppliers", authRequired, allowRoles("admin", "stock_handler"), a
     contactPerson: req.body.contactPerson || "",
     phone: req.body.phone || "",
     email: req.body.email || "",
-    address: req.body.address || ""
+    address: req.body.address || "",
+    active: true
   };
 
   const store = await withStore(async (draft) => {
@@ -299,7 +342,7 @@ app.post("/api/suppliers", authRequired, allowRoles("admin", "stock_handler"), a
 app.put("/api/suppliers/:id", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
   const store = await withStore(async (draft) => {
     draft.suppliers = draft.suppliers.map((supplier) =>
-      supplier.id === req.params.id ? { ...supplier, ...req.body } : supplier
+      supplier.id === req.params.id ? { ...supplier, ...req.body,active: supplier.active } : supplier
     );
     return draft;
   });
@@ -309,9 +352,35 @@ app.put("/api/suppliers/:id", authRequired, allowRoles("admin", "stock_handler")
 
 app.delete("/api/suppliers/:id", authRequired, allowRoles("admin"), async (req, res) => {
   const store = await withStore(async (draft) => {
-    draft.suppliers = draft.suppliers.filter((supplier) => supplier.id !== req.params.id);
+    const supplier = draft.suppliers.find(
+      (supplier) => supplier.id === req.params.id
+    );
+
+    if (!supplier) {
+      return draft;
+    }
+
+    const inUse = draft.products.some(
+      (product) =>
+        product.active &&
+        product.supplierId === req.params.id
+    );
+
+    if (inUse) {
+      throw new Error("This supplier is assigned to one or more products.");
+    }
+
+    supplier.active = false;
+
     return draft;
+  }).catch((error) => {
+    res.status(400).json({ message: error.message });
+    return null;
   });
+
+  if (!store) {
+    return;
+  }
 
   res.json(store.suppliers);
 });

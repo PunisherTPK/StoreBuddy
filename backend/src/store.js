@@ -238,7 +238,7 @@ async function replaceStore(connection, store) {
           INSERT INTO categories (id, name, description, active)
           VALUES (?, ?, ?, ?)
         `,
-        [category.id, category.name, category.description || null, Boolean(category.active)]
+        [category.id, category.name, category.description || null, Boolean(category.active ?? true)]
       );
     }
 
@@ -255,7 +255,7 @@ async function replaceStore(connection, store) {
           supplier.phone || null,
           supplier.email || null,
           supplier.address || null,
-          Boolean(supplier.active)
+          Boolean(supplier.active ?? true)
         ]
       );
     }
@@ -280,7 +280,7 @@ async function replaceStore(connection, store) {
           Number(product.reorderLevel || 0),
           product.unit || "pcs",
           product.description || null,
-          Boolean(product.active)
+          Boolean(product.active ?? true)
         ]
       );
     }
@@ -608,4 +608,88 @@ export function generateId(prefix) {
 
 export async function closeStore() {
   await pool.end();
+}
+
+
+/* ===========================================================
+   PRODUCT CRUD
+=========================================================== */
+
+export async function getProducts() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        id,
+        category_id AS categoryId,
+        supplier_id AS supplierId,
+        name,
+        sku,
+        barcode,
+        price,
+        cost_price AS costPrice,
+        stock,
+        reorder_level AS reorderLevel,
+        unit,
+        description,
+        active
+      FROM products
+      WHERE active = TRUE
+      ORDER BY name ASC
+    `);
+
+    return rows.map(castProduct);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createProduct(product) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      INSERT INTO products
+      (
+        id,
+        category_id,
+        supplier_id,
+        name,
+        sku,
+        barcode,
+        price,
+        cost_price,
+        stock,
+        reorder_level,
+        unit,
+        description,
+        active
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        product.id,
+        product.categoryId || null,
+        product.supplierId || null,
+        product.name,
+        product.sku || null,
+        product.barcode || null,
+        Number(product.price || 0),
+        Number(product.costPrice || 0),
+        Number(product.stock || 0),
+        Number(product.reorderLevel || 0),
+        product.unit || "pcs",
+        product.description || "",
+        true
+      ]
+    );
+  } finally {
+    connection.release();
+  }
 }

@@ -14,3 +14,6 @@ export const {
     generateId,
     closeStore
 } = store;
+
+export const getProducts = store.getProducts;
+export const createProduct = store.createProduct;
