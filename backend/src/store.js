@@ -365,7 +365,18 @@ async function replaceStore(connection, store) {
 }
 
 function toMysqlDate(value) {
-  return new Date(value).toISOString().slice(0, 19).replace("T", " ");
+  const date = value instanceof Date ? value : new Date(value);
+  const pad = (part) => String(part).padStart(2, "0");
+
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate())
+  ].join("-") + " " + [
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join(":");
 }
 
 function toIso(value) {
@@ -890,7 +901,7 @@ export async function logActivity({
     entity,
     entityId = null,
     description,
-    createdAt = new Date().toISOString()
+    createdAt = new Date()
 }) {
     await ensureStore();
 
@@ -924,4 +935,735 @@ export async function logActivity({
     } finally {
         connection.release();
     }
+}
+
+export async function getUserByUsername(username) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      `
+      SELECT id, name, username, password_hash AS passwordHash, role, active
+      FROM users
+      WHERE username = ? AND active = TRUE
+      LIMIT 1
+      `,
+      [username]
+    );
+
+    return rows[0] ? { ...rows[0], active: Boolean(rows[0].active) } : null;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getUserById(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      `
+      SELECT id, name, username, password_hash AS passwordHash, role, active
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    return rows[0] ? { ...rows[0], active: Boolean(rows[0].active) } : null;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createUser(user) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      INSERT INTO users (id, name, username, password_hash, role, active)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [user.id, user.name, user.username, user.passwordHash, user.role, Boolean(user.active ?? true)]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+export async function updateUser(id, user) {
+  await ensureStore();
+
+  const assignments = [];
+  const values = [];
+
+  for (const [key, column] of [
+    ["name", "name"],
+    ["username", "username"],
+    ["role", "role"],
+    ["active", "active"],
+    ["passwordHash", "password_hash"]
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(user, key)) {
+      assignments.push(`${column} = ?`);
+      values.push(key === "active" ? Boolean(user[key]) : user[key]);
+    }
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [...values, id]);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createCategory(category) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      INSERT INTO categories (id, name, description, active)
+      VALUES (?, ?, ?, ?)
+      `,
+      [category.id, category.name, category.description || null, Boolean(category.active ?? true)]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+export async function updateCategory(id, category) {
+  await ensureStore();
+
+  const assignments = [];
+  const values = [];
+
+  if (Object.prototype.hasOwnProperty.call(category, "name")) {
+    assignments.push("name = ?");
+    values.push(category.name);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(category, "description")) {
+    assignments.push("description = ?");
+    values.push(category.description || null);
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(`UPDATE categories SET ${assignments.join(", ")} WHERE id = ?`, [...values, id]);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getCategory(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query("SELECT id, name, description, active FROM categories WHERE id = ?", [id]);
+    return rows[0] ? { ...rows[0], active: Boolean(rows[0].active) } : null;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function categoryInUse(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      "SELECT COUNT(*) AS total FROM products WHERE active = TRUE AND category_id = ?",
+      [id]
+    );
+    return Number(rows[0].total) > 0;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createSupplier(supplier) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(
+      `
+      INSERT INTO suppliers (id, name, contact_person, phone, email, address, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        supplier.id,
+        supplier.name,
+        supplier.contactPerson || null,
+        supplier.phone || null,
+        supplier.email || null,
+        supplier.address || null,
+        Boolean(supplier.active ?? true)
+      ]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+export async function updateSupplier(id, supplier) {
+  await ensureStore();
+
+  const allowed = {
+    name: "name",
+    contactPerson: "contact_person",
+    phone: "phone",
+    email: "email",
+    address: "address"
+  };
+  const assignments = [];
+  const values = [];
+
+  for (const [key, column] of Object.entries(allowed)) {
+    if (Object.prototype.hasOwnProperty.call(supplier, key)) {
+      assignments.push(`${column} = ?`);
+      values.push(supplier[key] || null);
+    }
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(`UPDATE suppliers SET ${assignments.join(", ")} WHERE id = ?`, [...values, id]);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getSupplier(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      `
+      SELECT id, name, contact_person AS contactPerson, phone, email, address, active
+      FROM suppliers
+      WHERE id = ?
+      `,
+      [id]
+    );
+
+    return rows[0] ? { ...rows[0], active: Boolean(rows[0].active) } : null;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function supplierInUse(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      "SELECT COUNT(*) AS total FROM products WHERE active = TRUE AND supplier_id = ?",
+      [id]
+    );
+    return Number(rows[0].total) > 0;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function updateProduct(id, changes) {
+  await ensureStore();
+
+  const allowed = {
+    name: "name",
+    barcode: "barcode",
+    sku: "sku",
+    categoryId: "category_id",
+    supplierId: "supplier_id",
+    price: "price",
+    costPrice: "cost_price",
+    stock: "stock",
+    reorderLevel: "reorder_level",
+    unit: "unit",
+    description: "description"
+  };
+  const assignments = [];
+  const values = [];
+
+  for (const [key, column] of Object.entries(allowed)) {
+    if (Object.prototype.hasOwnProperty.call(changes, key)) {
+      assignments.push(`${column} = ?`);
+      values.push(["price", "costPrice", "stock", "reorderLevel"].includes(key) ? Number(changes[key] || 0) : changes[key] || null);
+    }
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query(`UPDATE products SET ${assignments.join(", ")} WHERE id = ?`, [...values, id]);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function deleteProduct(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.query("UPDATE products SET active = FALSE WHERE id = ?", [id]);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getPurchaseOrders() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        po.id,
+        po.supplier_id AS supplierId,
+        po.status,
+        po.created_at AS createdAt,
+        po.received_at AS receivedAt,
+        po.notes,
+        poi.product_id AS productId,
+        poi.quantity,
+        poi.cost_price AS costPrice
+      FROM purchase_orders po
+      LEFT JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
+      ORDER BY po.created_at DESC, poi.id ASC
+    `);
+
+    return collapseOrders(rows);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createPurchaseOrder(purchaseOrder) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `
+      INSERT INTO purchase_orders (id, supplier_id, status, created_at, received_at, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        purchaseOrder.id,
+        purchaseOrder.supplierId,
+        purchaseOrder.status,
+        toMysqlDate(purchaseOrder.createdAt),
+        purchaseOrder.receivedAt ? toMysqlDate(purchaseOrder.receivedAt) : null,
+        purchaseOrder.notes || null
+      ]
+    );
+
+    for (const item of purchaseOrder.items) {
+      await connection.query(
+        `
+        INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, cost_price)
+        VALUES (?, ?, ?, ?)
+        `,
+        [purchaseOrder.id, item.productId, Number(item.quantity || 0), Number(item.costPrice || 0)]
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function receivePurchaseOrder(id) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const [orders] = await connection.query(
+      "SELECT id, status FROM purchase_orders WHERE id = ? FOR UPDATE",
+      [id]
+    );
+
+    if (orders.length === 0 || orders[0].status === "received") {
+      await connection.commit();
+      return;
+    }
+
+    await connection.query(
+      "UPDATE purchase_orders SET status = 'received', received_at = NOW() WHERE id = ?",
+      [id]
+    );
+
+    const [items] = await connection.query(
+      `
+      SELECT product_id AS productId, quantity, cost_price AS costPrice
+      FROM purchase_order_items
+      WHERE purchase_order_id = ?
+      `,
+      [id]
+    );
+
+    for (const item of items) {
+      await connection.query(
+        `
+        UPDATE products
+        SET stock = stock + ?, cost_price = ?
+        WHERE id = ?
+        `,
+        [Number(item.quantity || 0), Number(item.costPrice || 0), item.productId]
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function getSales() {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(`
+      SELECT
+        s.id,
+        s.cashier_id AS cashierId,
+        s.created_at AS createdAt,
+        s.subtotal,
+        s.total,
+        s.payment_method AS paymentMethod,
+        si.product_id AS productId,
+        si.quantity,
+        si.price,
+        p.name AS productName
+      FROM sales s
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      LEFT JOIN products p ON p.id = si.product_id
+      ORDER BY s.created_at DESC, si.id ASC
+    `);
+
+    return collapseSales(rows);
+  } finally {
+    connection.release();
+  }
+}
+
+export async function createSale({ id, cashierId, paymentMethod, items }) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const saleItems = [];
+
+    for (const item of items) {
+      const quantity = Number(item.quantity || 0);
+      if (quantity <= 0) {
+        throw new Error("Quantity must be greater than zero.");
+      }
+
+      const [products] = await connection.query(
+        `
+        SELECT id, name, price, stock
+        FROM products
+        WHERE id = ? AND active = TRUE
+        FOR UPDATE
+        `,
+        [item.productId]
+      );
+      const product = products[0];
+
+      if (!product) {
+        throw new Error(`Product not found: ${item.productId}`);
+      }
+
+      if (Number(product.stock) < quantity) {
+        throw new Error(`Not enough stock for ${product.name}.`);
+      }
+
+      saleItems.push({
+        productId: product.id,
+        quantity,
+        price: Number(product.price),
+        name: product.name
+      });
+    }
+
+    const subtotal = saleItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const createdAt = new Date();
+
+    await connection.query(
+      `
+      INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [id, cashierId, toMysqlDate(createdAt), subtotal, subtotal, paymentMethod || "cash"]
+    );
+
+    for (const item of saleItems) {
+      await connection.query(
+        `
+        INSERT INTO sale_items (sale_id, product_id, quantity, price)
+        VALUES (?, ?, ?, ?)
+        `,
+        [id, item.productId, item.quantity, item.price]
+      );
+      await connection.query(
+        "UPDATE products SET stock = stock - ? WHERE id = ?",
+        [item.quantity, item.productId]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      id,
+      cashierId,
+      createdAt: toIso(createdAt),
+      items: saleItems,
+      subtotal,
+      total: subtotal,
+      paymentMethod: paymentMethod || "cash"
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function exportBackup() {
+  await ensureStore();
+
+  const lastBackupAt = new Date().toISOString();
+  const connection = await pool.getConnection();
+
+  try {
+    await seedMeta(connection, {
+      ...(await readMeta(connection)),
+      lastBackupAt
+    });
+  } finally {
+    connection.release();
+  }
+
+  return readStore();
+}
+
+export async function restoreBackup(backup) {
+  await ensureStore();
+
+  const next = normalizeStore({
+    ...backup,
+    meta: {
+      ...(backup.meta || {}),
+      lastRestoredAt: new Date().toISOString()
+    }
+  });
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    await connection.query("SET FOREIGN_KEY_CHECKS = 0");
+    await connection.query("TRUNCATE TABLE activity_logs");
+    await connection.query("TRUNCATE TABLE sale_items");
+    await connection.query("TRUNCATE TABLE sales");
+    await connection.query("TRUNCATE TABLE purchase_order_items");
+    await connection.query("TRUNCATE TABLE purchase_orders");
+    await connection.query("TRUNCATE TABLE products");
+    await connection.query("TRUNCATE TABLE suppliers");
+    await connection.query("TRUNCATE TABLE categories");
+    await connection.query("TRUNCATE TABLE users");
+    await connection.query("TRUNCATE TABLE app_meta");
+    await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+
+    for (const user of next.users) {
+      await connection.query(
+        `
+          INSERT INTO users (id, name, username, password_hash, role, active)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [user.id, user.name, user.username, user.passwordHash, user.role, Boolean(user.active)]
+      );
+    }
+
+    for (const category of next.categories) {
+      await connection.query(
+        `
+          INSERT INTO categories (id, name, description, active)
+          VALUES (?, ?, ?, ?)
+        `,
+        [category.id, category.name, category.description || null, Boolean(category.active ?? true)]
+      );
+    }
+
+    for (const supplier of next.suppliers) {
+      await connection.query(
+        `
+          INSERT INTO suppliers (id, name, contact_person, phone, email, address, active)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          supplier.id,
+          supplier.name,
+          supplier.contactPerson || null,
+          supplier.phone || null,
+          supplier.email || null,
+          supplier.address || null,
+          Boolean(supplier.active ?? true)
+        ]
+      );
+    }
+
+    for (const product of next.products) {
+      await connection.query(
+        `
+          INSERT INTO products
+            (id, category_id, supplier_id, name, sku, barcode, price, cost_price, stock, reorder_level, unit, description, active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          product.id,
+          product.categoryId || null,
+          product.supplierId || null,
+          product.name,
+          product.sku || null,
+          product.barcode || null,
+          Number(product.price || 0),
+          Number(product.costPrice || 0),
+          Number(product.stock || 0),
+          Number(product.reorderLevel || 0),
+          product.unit || "pcs",
+          product.description || null,
+          Boolean(product.active ?? true)
+        ]
+      );
+    }
+
+    for (const order of next.purchaseOrders) {
+      await connection.query(
+        `
+          INSERT INTO purchase_orders (id, supplier_id, status, created_at, received_at, notes)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          order.id,
+          order.supplierId,
+          order.status || "pending",
+          toMysqlDate(order.createdAt),
+          order.receivedAt ? toMysqlDate(order.receivedAt) : null,
+          order.notes || null
+        ]
+      );
+
+      for (const item of order.items || []) {
+        await connection.query(
+          `
+            INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, cost_price)
+            VALUES (?, ?, ?, ?)
+          `,
+          [order.id, item.productId, Number(item.quantity || 0), Number(item.costPrice || 0)]
+        );
+      }
+    }
+
+    for (const sale of next.sales) {
+      await connection.query(
+        `
+          INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          sale.id,
+          sale.cashierId,
+          toMysqlDate(sale.createdAt),
+          Number(sale.subtotal || 0),
+          Number(sale.total || 0),
+          sale.paymentMethod || "cash"
+        ]
+      );
+
+      for (const item of sale.items || []) {
+        await connection.query(
+          `
+            INSERT INTO sale_items (sale_id, product_id, quantity, price)
+            VALUES (?, ?, ?, ?)
+          `,
+          [sale.id, item.productId, Number(item.quantity || 0), Number(item.price || 0)]
+        );
+      }
+    }
+
+    await seedMeta(connection, next.meta);
+    await connection.commit();
+    return next;
+  } catch (error) {
+    await connection.rollback();
+    try {
+      await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+    } catch {
+      // Ignore cleanup errors after rollback.
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 }

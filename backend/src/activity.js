@@ -13,6 +13,6 @@ export async function recordActivity(
         entity,
         entityId,
         description,
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
     });
 }

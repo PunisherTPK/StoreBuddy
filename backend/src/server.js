@@ -15,16 +15,35 @@ import {
 import {
   generateId,
   readStore,
-  withStore,
-  writeStore,
   createProduct,
+  updateProduct,
+  deleteProduct,
   getProducts,
   getSuppliers,
+  createSupplier,
+  updateSupplier,
+  getSupplier,
+  supplierInUse,
   deleteSupplier,
   getUsers,
+  getUserByUsername,
+  getUserById,
+  createUser,
+  updateUser,
   deleteUser,
   getCategories,
+  createCategory,
+  updateCategory,
+  getCategory,
+  categoryInUse,
   deleteCategory,
+  getPurchaseOrders,
+  createPurchaseOrder,
+  receivePurchaseOrder,
+  getSales,
+  createSale,
+  exportBackup,
+  restoreBackup,
   logActivity,
   getActivityLogs
 } from "./storeProvider.js";
@@ -46,7 +65,9 @@ function sanitizeUser(user) {
 }
 
 function getTodayIso() {
-  return new Date().toISOString().slice(0, 10);
+  const date = new Date();
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function summarize(store) {
@@ -127,8 +148,7 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
-  const store = await readStore();
-  const user = store.users.find((entry) => entry.username === username && entry.active);
+  const user = await getUserByUsername(username);
 
   if (!user) {
     return res.status(401).json({ message: "Invalid username." });
@@ -167,8 +187,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.get("/api/auth/me", authRequired, async (req, res) => {
-  const store = await readStore();
-  const user = store.users.find((entry) => entry.id === req.auth.userId);
+  const user = await getUserById(req.auth.userId);
 
   if (!user) {
     return res.status(404).json({ message: "User not found." });
@@ -200,14 +219,13 @@ app.get("/api/dashboard", authRequired, async (_req, res) => {
 });
 
 app.get("/api/alerts/low-stock", authRequired, async (_req, res) => {
-  const store = await readStore();
-  const items = store.products.filter((product) => Number(product.stock) <= Number(product.reorderLevel));
+  const products = await getProducts();
+  const items = products.filter((product) => Number(product.stock) <= Number(product.reorderLevel));
   res.json(items);
 });
 
 app.get("/api/categories", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json(store.categories);
+  res.json(await getCategories());
 });
 
 app.post("/api/categories", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
@@ -217,10 +235,7 @@ app.post("/api/categories", authRequired, allowRoles("admin", "stock_handler"), 
     description: req.body.description || ""
   };
 
-  const store = await withStore(async (draft) => {
-    draft.categories.unshift(category);
-    return draft;
-  });
+  await createCategory(category);
   await logActivity({
       userId: req.auth.userId,
       action: "CATEGORY_CREATED",
@@ -228,16 +243,11 @@ app.post("/api/categories", authRequired, allowRoles("admin", "stock_handler"), 
       entityId: category.id,
       description: `${req.auth.name} added category "${category.name}".`
   });
-  res.status(201).json(store.categories);
+  res.status(201).json(await getCategories());
 });
 
 app.put("/api/categories/:id", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    draft.categories = draft.categories.map((category) =>
-      category.id === req.params.id ? { ...category, ...req.body } : category
-    );
-    return draft;
-  });
+  await updateCategory(req.params.id, req.body);
   await logActivity({
       userId: req.auth.userId,
       action: "CATEGORY_UPDATED",
@@ -245,7 +255,7 @@ app.put("/api/categories/:id", authRequired, allowRoles("admin", "stock_handler"
       entityId: req.params.id,
       description: `${req.auth.name} updated category "${req.body.name}".`
   });
-  res.json(store.categories);
+  res.json(await getCategories());
 });
 
 app.delete(
@@ -254,13 +264,8 @@ app.delete(
   allowRoles("admin"),
   async (req, res) => {
 
-    const store = await readStore();
-
-    const inUse = store.products.some(
-      (product) =>
-        product.active &&
-        product.categoryId === req.params.id
-    );
+    const category = await getCategory(req.params.id);
+    const inUse = await categoryInUse(req.params.id);
 
     if (inUse) {
       return res.status(400).json({
@@ -276,7 +281,7 @@ app.delete(
         action: "CATEGORY_DELETED",
         entity: "category",
         entityId: req.params.id,
-        description: `${req.auth.name} deleted category "${category.name}".`
+        description: `${req.auth.name} deleted category "${category?.name || req.params.id}".`
     });
     res.json(categories);
   }
@@ -284,8 +289,7 @@ app.delete(
 
 
 app.get("/api/products", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json(store.products);
+  res.json(await getProducts());
 });
 
 app.post(
@@ -323,26 +327,7 @@ app.post(
 );
 
 app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    draft.products = draft.products.map((product) =>
-      product.id === req.params.id
-        ? {
-            ...product,
-            ...req.body,
-
-            categoryId: req.body.categoryId ?? product.categoryId,
-            supplierId: req.body.supplierId ?? product.supplierId,
-            active: product.active,
-
-            price: Number(req.body.price ?? product.price),
-            costPrice: Number(req.body.costPrice ?? product.costPrice),
-            stock: Number(req.body.stock ?? product.stock),
-            reorderLevel: Number(req.body.reorderLevel ?? product.reorderLevel)
-          }
-        : product
-    );
-    return draft;
-  });
+  await updateProduct(req.params.id, req.body);
   await logActivity({
       userId: req.auth.userId,
       action: "PRODUCT_UPDATED",
@@ -355,17 +340,7 @@ app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"),
 });
 
 app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    const product = draft.products.find(
-      (product) => product.id === req.params.id
-    );
-
-    if (product) {
-      product.active = false;
-    }
-
-    return draft;
-  });
+  await deleteProduct(req.params.id);
   await logActivity({
       userId: req.auth.userId,
       action: "PRODUCT_DELETED",
@@ -378,8 +353,7 @@ app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, r
 });
 
 app.get("/api/suppliers", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json(store.suppliers);
+  res.json(await getSuppliers());
 });
 
 app.post("/api/suppliers", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
@@ -393,23 +367,15 @@ app.post("/api/suppliers", authRequired, allowRoles("admin", "stock_handler"), a
     active: true
   };
 
-  const store = await withStore(async (draft) => {
-    draft.suppliers.unshift(supplier);
-    return draft;
-  });
+  await createSupplier(supplier);
 
-  res.status(201).json(store.suppliers);
+  res.status(201).json(await getSuppliers());
 });
 
 app.put("/api/suppliers/:id", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
-  const store = await withStore(async (draft) => {
-    draft.suppliers = draft.suppliers.map((supplier) =>
-      supplier.id === req.params.id ? { ...supplier, ...req.body,active: supplier.active } : supplier
-    );
-    return draft;
-  });
+  await updateSupplier(req.params.id, req.body);
 
-  res.json(store.suppliers);
+  res.json(await getSuppliers());
 });
 
 app.delete(
@@ -426,6 +392,7 @@ app.delete(
     }
     */}
 
+    const user = await getUserById(req.params.id);
     await deleteUser(req.params.id);
 
     const users = await getUsers();
@@ -434,7 +401,7 @@ app.delete(
         action: "USER_DELETED",
         entity: "user",
         entityId: req.params.id,
-        description: `${req.auth.name} deleted user "${user.name}".`
+        description: `${req.auth.name} deleted user "${user?.name || req.params.id}".`
     });
     res.json(users);
   }
@@ -447,13 +414,8 @@ app.delete(
   allowRoles("admin"),
   async (req, res) => {
 
-    const store = await readStore();
-
-    const inUse = store.products.some(
-      (product) =>
-        product.active &&
-        product.supplierId === req.params.id
-    );
+    const supplier = await getSupplier(req.params.id);
+    const inUse = await supplierInUse(req.params.id);
 
     if (inUse) {
       return res.status(400).json({
@@ -469,15 +431,14 @@ app.delete(
         action: "SUPPLIER_DELETED",
         entity: "supplier",
         entityId: req.params.id,
-        description: `${req.auth.name} deleted supplier "${supplier.name}".`
+        description: `${req.auth.name} deleted supplier "${supplier?.name || req.params.id}".`
     });
     res.json(suppliers);
   }
 );
 
 app.get("/api/purchase-orders", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json(store.purchaseOrders);
+  res.json(await getPurchaseOrders());
 });
 
 app.post("/api/purchase-orders", authRequired, allowRoles("admin", "stock_handler"), async (req, res) => {
@@ -485,7 +446,7 @@ app.post("/api/purchase-orders", authRequired, allowRoles("admin", "stock_handle
     id: generateId("po"),
     supplierId: req.body.supplierId,
     status: "pending",
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
     receivedAt: null,
     notes: req.body.notes || "",
     items: (req.body.items || []).map((item) => ({
@@ -495,10 +456,7 @@ app.post("/api/purchase-orders", authRequired, allowRoles("admin", "stock_handle
     }))
   };
 
-  const store = await withStore(async (draft) => {
-    draft.purchaseOrders.unshift(purchaseOrder);
-    return draft;
-  });
+  await createPurchaseOrder(purchaseOrder);
   await logActivity({
     userId: req.auth.userId,
     action: "PURCHASE_ORDER_CREATED",
@@ -506,7 +464,7 @@ app.post("/api/purchase-orders", authRequired, allowRoles("admin", "stock_handle
     entityId: purchaseOrder.id,
     description: `${req.auth.name} created purchase order "${purchaseOrder.id}".`
   });
-  res.status(201).json(store.purchaseOrders);
+  res.status(201).json(await getPurchaseOrders());
 });
 
 app.post(
@@ -514,93 +472,41 @@ app.post(
   authRequired,
   allowRoles("admin", "stock_handler"),
   async (req, res) => {
-    const store = await withStore(async (draft) => {
-      const order = draft.purchaseOrders.find((entry) => entry.id === req.params.id);
-      if (!order || order.status === "received") {
-        return draft;
-      }
-
-      order.status = "received";
-      order.receivedAt = new Date().toISOString();
-
-      for (const item of order.items) {
-        const product = draft.products.find((entry) => entry.id === item.productId);
-        if (product) {
-          product.stock = Number(product.stock) + Number(item.quantity);
-          product.costPrice = Number(item.costPrice || product.costPrice);
-        }
-      }
-
-      return draft;
-    });
+    await receivePurchaseOrder(req.params.id);
     await logActivity({
         userId: req.auth.userId,
         action: "PURCHASE_ORDER_RECEIVED",
         entity: "purchaseOrder",
-        entityId: purchaseOrder.id,
-        description: `${req.auth.name} received purchase order "${purchaseOrder.id}".`
+        entityId: req.params.id,
+        description: `${req.auth.name} received purchase order "${req.params.id}".`
     });
     res.json({
-      purchaseOrders: store.purchaseOrders,
-      products: store.products
+      purchaseOrders: await getPurchaseOrders(),
+      products: await getProducts()
     });
   }
 );
 
 app.get("/api/sales", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json(store.sales);
+  res.json(await getSales());
 });
 
 app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req, res) => {
   const payloadItems = req.body.items || [];
-  const store = await withStore(async (draft) => {
-    const saleItems = payloadItems.map((item) => {
-      const product = draft.products.find((entry) => entry.id === item.productId);
-      if (!product) {
-        throw new Error(`Product not found: ${item.productId}`);
-      }
+  let sale;
 
-      const quantity = Number(item.quantity || 0);
-      if (quantity <= 0) {
-        throw new Error("Quantity must be greater than zero.");
-      }
-
-      if (Number(product.stock) < quantity) {
-        throw new Error(`Not enough stock for ${product.name}.`);
-      }
-
-      product.stock = Number(product.stock) - quantity;
-
-      return {
-        productId: product.id,
-        quantity,
-        price: Number(product.price),
-        name: product.name
-      };
-    });
-
-    const subtotal = saleItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
-    const sale = {
+  try {
+    sale = await createSale({
       id: generateId("sale"),
       cashierId: req.auth.userId,
-      createdAt: new Date().toISOString(),
-      items: saleItems,
-      subtotal,
-      total: subtotal,
+      items: payloadItems,
       paymentMethod: req.body.paymentMethod || "cash"
-    };
-
-    draft.sales.unshift(sale);
-    return draft;
-  }).catch((error) => {
+    });
+  } catch (error) {
     res.status(400).json({ message: error.message });
-    return null;
-  });
-
-  if (!store) {
     return;
   }
+
   await logActivity({
       userId: req.auth.userId,
       action: "SALE_COMPLETED",
@@ -608,6 +514,7 @@ app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req,
       entityId: sale.id,
       description: `${req.auth.name} completed Sale ${sale.id}.`
   });
+  const store = await readStore();
   res.status(201).json({
     sales: store.sales,
     products: store.products,
@@ -621,8 +528,8 @@ app.get("/api/reports/overview", authRequired, async (_req, res) => {
 });
 
 app.get("/api/users", authRequired, allowRoles("admin"), async (_req, res) => {
-  const store = await readStore();
-  res.json(store.users.map(sanitizeUser));
+  const users = await getUsers();
+  res.json(users.map(sanitizeUser));
 });
 
 app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
@@ -635,10 +542,7 @@ app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
     active: req.body.active ?? true
   };
 
-  const store = await withStore(async (draft) => {
-    draft.users.unshift(user);
-    return draft;
-  });
+  await createUser(user);
   await logActivity({
       userId: req.auth.userId,
       action: "USER_CREATED",
@@ -646,7 +550,8 @@ app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
       entityId: user.id,
       description: `${req.auth.name} added user "${user.name}".`
   });
-  res.status(201).json(store.users.map(sanitizeUser));
+  const users = await getUsers();
+  res.status(201).json(users.map(sanitizeUser));
 });
 
 app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) => {
@@ -654,21 +559,12 @@ app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) =>
     ? await hashPassword(req.body.password)
     : null;
 
-  const store = await withStore(async (draft) => {
-    draft.users = draft.users.map((user) => {
-      if (user.id !== req.params.id) {
-        return user;
-      }
-
-      return {
-        ...user,
-        ...req.body,
-        passwordHash: hashedPassword ?? user.passwordHash
-      };
-    });
-
-    return draft;
-  });
+  const updates = { ...req.body };
+  delete updates.password;
+  if (hashedPassword) {
+    updates.passwordHash = hashedPassword;
+  }
+  await updateUser(req.params.id, updates);
 
   await logActivity({
       userId: req.auth.userId,
@@ -678,24 +574,18 @@ app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) =>
       description: `${req.auth.name} updated user "${req.params.id}".`
   });
 
-  res.json(store.users.map(sanitizeUser));
+  const users = await getUsers();
+  res.json(users.map(sanitizeUser));
 });
 
 
 app.get("/api/backup/export", authRequired, allowRoles("admin"), async (_req, res) => {
-  const store = await readStore();
-  store.meta.lastBackupAt = new Date().toISOString();
-  await writeStore(store);
+  const store = await exportBackup();
   res.json(store);
 });
 
 app.post("/api/backup/restore", authRequired, allowRoles("admin"), async (req, res) => {
-  const next = req.body;
-  next.meta = {
-    ...next.meta,
-    lastRestoredAt: new Date().toISOString()
-  };
-  const store = await writeStore(next);
+  const store = await restoreBackup(req.body);
   res.json({
     meta: store.meta,
     summary: summarize(store)
