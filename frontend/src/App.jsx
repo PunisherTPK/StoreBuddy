@@ -3093,50 +3093,182 @@ function PosScreen({
   );
 }
 
+
 function ReportsScreen({ boot }) {
+  const [reportView, setReportView] = useState("overview");
   const data = summarizeLocal(boot).summary;
   const groupedSales = Object.entries(groupSalesByDay(boot.sales));
 
+  const reportTabs = [
+    { id: "overview", label: "Overview" },
+    { id: "sales", label: "Sales Summary" },
+    { id: "profit", label: "Profit & Loss" },
+    { id: "stock", label: "Stock Report" },
+    { id: "monthly", label: "Monthly" }
+  ];
+
   return (
     <section className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-2">
-        <SectionCard subtitle="Products with the highest movement." title="Fast-moving Items">
-          {data.fastMoving.length ? (
-            <div className="space-y-3">
-              {data.fastMoving.map((item) => (
-                <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
-          )}
-        </SectionCard>
-        <SectionCard subtitle="Products that need merchandising or stock review." title="Slow-moving Items">
-          {data.slowMoving.length ? (
-            <div className="space-y-3">
-              {data.slowMoving.map((item) => (
-                <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
-          )}
-        </SectionCard>
+      <div className="flex flex-wrap gap-2">
+        {reportTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setReportView(tab.id)}
+            className="rounded-2xl px-4 py-2 text-sm font-medium transition"
+            style={
+              reportView === tab.id
+                ? { background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))", color: "#ffffff" }
+                : { background: "var(--surface-2)", color: "var(--text-soft)" }
+            }
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <SectionCard subtitle="Readable daily view for revenue and transaction count." title="Sales Summary">
-        <DataTable
-          columns={[
-            { key: "date", label: "Date", render: ([date]) => date },
-            { key: "count", label: "Transactions", render: ([, value]) => value.count },
-            { key: "total", label: "Revenue", render: ([, value]) => currency(value.total) }
-          ]}
-          rows={groupedSales}
-        />
-      </SectionCard>
+      {reportView === "overview" ? <OverviewReport data={data} sales={boot.sales} /> : null}
+
+      {reportView === "sales" ? (
+        <div className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <SectionCard subtitle="Products with the highest movement." title="Fast-moving Items">
+              {data.fastMoving.length ? (
+                <div className="space-y-3">
+                  {data.fastMoving.map((item) => (
+                    <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
+              )}
+            </SectionCard>
+            <SectionCard subtitle="Products that need merchandising or stock review." title="Slow-moving Items">
+              {data.slowMoving.length ? (
+                <div className="space-y-3">
+                  {data.slowMoving.map((item) => (
+                    <MetricRow key={item.id} label={item.name} value={`${item.sold} sold`} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState description="Sales history will populate these rankings." title="No sales movement yet" />
+              )}
+            </SectionCard>
+          </div>
+
+          <SectionCard subtitle="Readable daily view for revenue and transaction count." title="Sales Summary">
+            <DataTable
+              columns={[
+                { key: "date", label: "Date", render: ([date]) => date },
+                { key: "count", label: "Transactions", render: ([, value]) => value.count },
+                { key: "total", label: "Revenue", render: ([, value]) => currency(value.total) }
+              ]}
+              rows={groupedSales}
+            />
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {reportView === "profit" ? (
+        <SectionCard subtitle="Built next." title="Profit & Loss">
+          <EmptyState description="This report is being built next." title="Coming soon" />
+        </SectionCard>
+      ) : null}
+
+      {reportView === "stock" ? (
+        <SectionCard subtitle="Built next." title="Stock Report">
+          <EmptyState description="This report is being built next." title="Coming soon" />
+        </SectionCard>
+      ) : null}
+
+      {reportView === "monthly" ? (
+        <SectionCard subtitle="Built next." title="Monthly Report">
+          <EmptyState description="This report is being built next." title="Coming soon" />
+        </SectionCard>
+      ) : null}
     </section>
   );
 }
+
+function OverviewReport({ data, sales }) {
+  const cards = [
+    { label: "Today's Revenue", value: currency(data.todayRevenue), icon: Wallet, accent: "text-blue-600" },
+    { label: "Today's Profit", value: currency(data.todayProfit), icon: TrendingUp, accent: "text-emerald-600" },
+    { label: "Total Revenue", value: currency(data.totalRevenue), icon: ShoppingCart, accent: "text-slate-900" },
+    { label: "Total Profit", value: currency(data.totalProfit), icon: TrendingUp, accent: "text-emerald-600" },
+    { label: "Stock Value", value: currency(data.stockValue), icon: Package, accent: "text-slate-900" },
+    { label: "Low Stock Items", value: data.lowStockCount, icon: Truck, accent: "text-orange-500" }
+  ];
+
+  const dailyEntries = Object.entries(groupSalesByDay(sales))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-14);
+
+  const trendChartData = {
+    labels: dailyEntries.map(([date]) => date.slice(5)),
+    datasets: [
+      {
+        label: "Revenue",
+        data: dailyEntries.map(([, value]) => value.total),
+        backgroundColor: "#3B82F6",
+        borderRadius: 8,
+        borderSkipped: false
+      }
+    ]
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div className="card p-4" key={card.label}>
+              <div className="flex items-center justify-between">
+                <Icon className={`h-10 w-10 ${card.accent}`} />
+                <div className="flex-1 text-right">
+                  <p className="text-sm text-slate-500">{card.label}</p>
+                  <p className={`mt-1 text-2xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className="rounded-3xl p-6"
+        style={{ background: "var(--surface-1)", border: "1px solid var(--border-soft)" }}
+      >
+        <h3 className="mb-4 text-lg font-semibold" style={{ color: "var(--text-strong)" }}>
+          Revenue Trend (Last 14 Days)
+        </h3>
+        {dailyEntries.length ? (
+          <div className="h-64">
+            <Bar
+              data={trendChartData}
+              options={{
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: "#CBD5E1" }, grid: { display: false } },
+                  y: {
+                    beginAtZero: true,
+                    ticks: { color: "#CBD5E1" },
+                    grid: { color: "rgba(255,255,255,0.08)" }
+                  }
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <EmptyState description="Sales history will populate this trend." title="No sales yet" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users, onDeleteUser,setDeleteDialog }) {
   return (
@@ -3744,12 +3876,28 @@ function summarizeLocal(boot) {
     0
   );
   const soldMap = new Map();
+  const costMap = new Map(boot.products.map((product) => [product.id, Number(product.costPrice) || 0]));
 
   for (const sale of boot.sales) {
     for (const item of sale.items) {
       soldMap.set(item.productId, (soldMap.get(item.productId) || 0) + Number(item.quantity));
     }
   }
+
+  function estimateCogs(sale) {
+    return sale.items.reduce(
+      (sum, item) => sum + Number(item.quantity) * (costMap.get(item.productId) || 0),
+      0
+    );
+  }
+
+  const totalRevenue = boot.sales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  const totalCOGS = boot.sales.reduce((sum, sale) => sum + estimateCogs(sale), 0);
+  const totalProfit = totalRevenue - totalCOGS;
+
+  const todayRevenue = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  const todayCOGS = todaySales.reduce((sum, sale) => sum + estimateCogs(sale), 0);
+  const todayProfit = todayRevenue - todayCOGS;
 
   const movement = boot.products.map((product) => ({
     id: product.id,
@@ -3760,8 +3908,12 @@ function summarizeLocal(boot) {
   return {
     ...boot,
     summary: {
-      todayRevenue: todaySales.reduce((sum, sale) => sum + Number(sale.total), 0),
+      todayRevenue,
+      todayProfit,
       todaySalesCount: todaySales.length,
+      totalRevenue,
+      totalProfit,
+      totalCOGS,
       productCount: boot.products.length,
       supplierCount: boot.suppliers.length,
       lowStockCount: lowStockItems.length,
