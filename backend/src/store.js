@@ -169,6 +169,22 @@ async function createSchemaTables(connection) {
       CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products(id)
     )
   `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id VARCHAR(40) PRIMARY KEY,
+      user_id VARCHAR(40),
+      action VARCHAR(60) NOT NULL,
+      entity VARCHAR(40) NOT NULL,
+      entity_id VARCHAR(40),
+      description TEXT,
+      created_at DATETIME NOT NULL,
+
+      CONSTRAINT fk_activity_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+    )
+  `);
+
 }
 
 async function createMetaTable(connection) {
@@ -833,4 +849,79 @@ export async function deleteCategory(id) {
   } finally {
     connection.release();
   }
+}
+
+export async function getActivityLogs(limit = 50) {
+    await ensureStore();
+
+    const connection = await pool.getConnection();
+
+    try {
+        const [rows] = await connection.query(
+            `
+            SELECT
+                id,
+                user_id AS userId,
+                action,
+                entity,
+                entity_id AS entityId,
+                description,
+                created_at AS createdAt
+            FROM activity_logs
+            ORDER BY created_at DESC
+            LIMIT ?
+            `,
+            [limit]
+        );
+
+        return rows.map(row => ({
+            ...row,
+            createdAt: toIso(row.createdAt)
+        }));
+    } finally {
+        connection.release();
+    }
+}
+
+
+export async function logActivity({
+    userId = null,
+    action,
+    entity,
+    entityId = null,
+    description,
+    createdAt = new Date().toISOString()
+}) {
+    await ensureStore();
+
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.query(
+            `
+            INSERT INTO activity_logs
+            (
+                id,
+                user_id,
+                action,
+                entity,
+                entity_id,
+                description,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+                generateId("log"),
+                userId,
+                action,
+                entity,
+                entityId,
+                description,
+                toMysqlDate(createdAt)
+            ]
+        );
+    } finally {
+        connection.release();
+    }
 }

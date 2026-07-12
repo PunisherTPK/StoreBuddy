@@ -23,3 +23,5 @@ export const getUsers = store.getUsers;
 export const deleteUser = store.deleteUser;
 export const getCategories = store.getCategories;
 export const deleteCategory = store.deleteCategory;
+export const logActivity = store.logActivity;
+export const getActivityLogs = store.getActivityLogs;

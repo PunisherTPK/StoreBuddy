@@ -2,6 +2,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import storebuddyLogo from "../src/logo2.jpeg";
 import storebuddyLogo2 from "../src/storebuddy_logo2.png";
 import { LogOut } from "lucide-react";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title
+} from "chart.js";
+
+import { Doughnut, Bar } from "react-chartjs-2";
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title
+);
+
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -144,6 +167,8 @@ export default function App() {
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const barcodeInputRef = useRef(null);
   const themeMenuRef = useRef(null);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const stockChartRef = useRef(null);
 
   const roleTabs = useMemo(
     () => tabs.filter((tab) => (user ? tab.roles.includes(user.role) : false)),
@@ -231,6 +256,7 @@ export default function App() {
       const me = await api("/api/auth/me", {}, currentToken);
       setBoot(data);
       setUser(me.user);
+      setActivityLogs(data.activityLogs ?? []);
       setError("");
       if (!tabs.find((tab) => tab.id === activeTab && tab.roles.includes(me.user.role))) {
         setActiveTab("dashboard");
@@ -241,6 +267,7 @@ export default function App() {
       setUser(null);
       setBoot(null);
       localStorage.removeItem("storebuddy-token");
+
     } finally {
       setLoading(false);
     }
@@ -829,7 +856,15 @@ async function deleteSupplier(supplier) {
               <div className="min-h-0 flex-1 overflow-hidden">
                 {activeTab === "dashboard" ? (
                   <ScreenScrollArea>
-                    <DashboardScreen summary={boot.summary} products={boot.products} sales={recentSales} />
+                    <DashboardScreen 
+                    summary={boot.summary} 
+                    products={boot.products} 
+                    sales={recentSales} 
+                    categories={boot.categories} 
+                    activityLogs={activityLogs}
+                    stockChartData={boot.stockChartData}
+                    stockChartRef={stockChartRef}
+                    categoryChartData={boot.categoryChartData} />
                   </ScreenScrollArea>
                 ) : null}
 
@@ -1582,13 +1617,118 @@ function TopBar({
   );
 }
 
-function DashboardScreen({ products, sales, summary }) {
+const chartColors = [
+    "#6366F1", // Indigo
+    "#3B82F6", // Blue
+    "#06B6D4", // Cyan
+    "#10B981", // Emerald
+    "#22C55E", // Green
+    "#84CC16", // Lime
+    "#EAB308", // Yellow
+    "#F59E0B", // Amber
+    "#F97316", // Orange
+    "#EF4444", // Red
+    "#EC4899", // Pink
+    "#D946EF", // Fuchsia
+    "#A855F7", // Purple
+    "#8B5CF6", // Violet
+    "#14B8A6", // Teal
+    "#0EA5E9", // Sky
+    "#64748B", // Slate
+    "#78716C", // Stone
+    "#A3A3A3", // Neutral
+    "#4ADE80"  // Light Green
+];
+
+function DashboardScreen({ products, sales, summary,categories,activityLogs,stockChartRef }) {
   const cards = [
     { label: "Today's revenue", value: currency(summary.todayRevenue), accent: "text-blue-600" },
     { label: "Sales today", value: summary.todaySalesCount, accent: "text-slate-900" },
     { label: "Products", value: summary.productCount, accent: "text-slate-900" },
     { label: "Stock value", value: currency(summary.stockValue), accent: "text-emerald-600" }
   ];
+
+  const categoryCounts = (categories ?? [])
+      .map(category => ({
+          name: category.name,
+          count: (products ?? []).filter(
+              product => product.categoryId === category.id
+          ).length
+      }))
+      .sort((a, b) => b.count - a.count);
+      
+  const backgroundColor = categoryCounts.map(
+      (_, index) => chartColors[index % chartColors.length]
+  );
+
+  const categoryChartData = {
+    labels: categoryCounts.map((c) => c.name),
+    datasets: [
+      {
+        data: categoryCounts.map((c) => c.count),
+        backgroundColor,
+        borderWidth: 0,
+        borderRadius: 10,
+        borderSkipped: false
+      }
+    ]
+  };
+
+  const healthyCount = (products ?? []).filter(
+      (p) => p.stock > p.reorderLevel
+  ).length;
+
+  const lowStockCount = (products ?? []).filter(
+      (p) => p.stock > 0 && p.stock <= p.reorderLevel
+  ).length;
+
+  const outOfStockCount = (products ?? []).filter(
+      (p) => p.stock === 0
+  ).length;
+
+  const stockChartData = {
+      labels: ["Healthy", "Low Stock", "Out of Stock"],
+      datasets: [
+          {
+              label: "Products",
+              data: [
+                  healthyCount,
+                  lowStockCount,
+                  outOfStockCount
+              ],
+              backgroundColor: [
+                  "#30b383",
+                  "#e6ae21",
+                  "#ee6363"
+              ],
+              //borderRadius: 0
+          }
+      ]
+  };
+  const activityIcons = {
+      LOGIN: "🔐",
+
+      PRODUCT_CREATED: "📦",
+      PRODUCT_UPDATED: "✏️",
+      PRODUCT_DELETED: "🗑️",
+
+      SUPPLIER_CREATED: "🏢",
+      SUPPLIER_UPDATED: "✏️",
+      SUPPLIER_DELETED: "🗑️",
+
+      CATEGORY_CREATED: "📂",
+      CATEGORY_UPDATED: "✏️",
+      CATEGORY_DELETED: "🗑️",
+
+      USER_CREATED: "👤",
+      USER_UPDATED: "✏️",
+      USER_DELETED: "🗑️",
+
+      PURCHASE_ORDER_CREATED: "📄",
+      PURCHASE_ORDER_RECEIVED: "📥",
+
+      SALE_COMPLETED: "🛒"
+  };
 
   return (
     <section className="space-y-6">
@@ -1600,9 +1740,195 @@ function DashboardScreen({ products, sales, summary }) {
           </div>
         ))}
       </div>
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+          {/* Inventory by Category */}
+          <div
+              className="rounded-3xl p-6"
+              style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)"
+              }}
+          >
+              <h3
+                  className="mb-4 text-lg font-semibold"
+                  style={{ color: "var(--text-strong)" }}
+              >
+                  Inventory by Category
+              </h3>
+
+              <div className="h-64">
+                <Bar
+                    data={categoryChartData}
+                    options={{
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: "#CBD5E1"
+                                },
+                                grid: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: "#CBD5E1",
+                                    precision: 0
+                                },
+                                grid: {
+                                    color: "rgba(255,255,255,0.08)"
+                                }
+                            }
+                        }
+                    }}
+                />
+              </div>
+          </div>
+
+          {/* Stock Status */}
+          <div
+              className="rounded-3xl p-6"
+              style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)"
+              }}
+          >
+              <h3
+                  className="mb-4 text-lg font-semibold"
+                  style={{ color: "var(--text-strong)" }}
+              >
+                  Stock Status
+              </h3>
+
+              <div className="h-64">
+                <Doughnut
+                    data={stockChartData}
+                    options={{
+                        maintainAspectRatio: false,
+                        cutout: "0%",
+                        onClick: (event, elements) => {
+                            if (!elements.length) return;
+
+                            const index = elements[0].index;
+                            const label = stockChartData.labels[index];
+
+                            if (
+                                label === "Low Stock" ||
+                                label === "Out of Stock"
+                            ) {
+                                document
+                                    .getElementById("low-stock-alerts")
+                                    ?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "start"
+                                    });
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: "bottom",
+                                labels: {
+                                    color: "#CBD5E1"
+                                }
+                            }
+                        }
+                    }}
+                />
+              </div>
+          </div>
+
+          {/* Top Products */}
+          <div
+              className="rounded-3xl p-6"
+              style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)"
+              }}
+          >
+              <h3
+                  className="mb-4 text-lg font-semibold"
+                  style={{ color: "var(--text-strong)" }}
+              >
+                  Top Products
+              </h3>
+
+              Coming next...
+          </div>
+
+      </div>
+
+      <div
+          className="rounded-3xl p-6 mt-6"
+          style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border-soft)"
+          }}
+      >
+          <h3
+              className="text-lg font-semibold mb-5"
+              style={{ color: "var(--text-strong)" }}
+          >
+              Recent Activity
+          </h3>
+
+          <div className="space-y-3">
+
+              {(activityLogs ?? []).slice(0, 10).map((log) => (
+
+                  <div
+                      key={log.id}
+                      className="flex items-center justify-between rounded-xl px-3 py-2 transition-all hover:bg-white/5"
+                  >
+                      <div
+                          className="w-50 text-xs shrink-0"
+                          style={{ color: "var(--text-muted)" }}
+                      >
+                        {new Date(log.createdAt).toLocaleString()}
+                      </div>
+                      <div className="flex-1 flex items-center gap-3">
+
+                          <div className="text-base">
+                              {activityIcons[log.action] ?? "📌"}
+                          </div>
+
+                          <div>
+
+                              <div
+                                  className="text-sm font-medium leading-5"
+                                  style={{ color: "var(--text-strong)" }}
+                              >
+                                  {log.description}
+                              </div>
+
+                              <div
+                                  className="text-xs uppercase tracking-wider"
+                                  style={{ color: "var(--text-muted)" }}
+                              >
+                                  {log.action.replaceAll("_", " ")}
+                              </div>
+
+                          </div>
+
+                      </div>
+
+
+                  </div>
+
+              ))}
+
+          </div>
+
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <SectionCard title="Low stock alerts" subtitle="Products that need replenishment soon.">
+        <SectionCard id="low-stock-alerts" title="Low stock alerts" subtitle="Products that need replenishment soon.">
           {summary.lowStockItems.length ? (
             <div className="space-y-3">
               {summary.lowStockItems.map((product) => (
@@ -2809,9 +3135,9 @@ function UserForm({ busy, form, onChange, onSubmit }) {
   );
 }
 
-function SectionCard({ action, children, className = "", contentClassName = "", subtitle, title }) {
+function SectionCard({ id, action, children, className = "", contentClassName = "", subtitle, title }) {
   return (
-    <section className={`card glass-panel flex min-h-0 flex-col overflow-hidden p-5 sm:p-6 ${className}`}>
+    <section id={id} className={`card glass-panel flex min-h-0 flex-col overflow-hidden p-5 sm:p-6 ${className}`}>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="section-title">{title}</h3>

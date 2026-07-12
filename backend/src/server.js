@@ -24,7 +24,9 @@ import {
   getUsers,
   deleteUser,
   getCategories,
-  deleteCategory
+  deleteCategory,
+  logActivity,
+  getActivityLogs
 } from "./storeProvider.js";
 
 
@@ -108,6 +110,17 @@ function allowRoles(...roles) {
   };
 }
 
+
+app.get(
+  "/api/activity-logs",
+  authRequired,
+  async (_req, res) => {
+    const logs = await getActivityLogs(100);
+    res.json(logs);
+  }
+);
+
+
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -135,7 +148,13 @@ app.post("/api/auth/login", async (req, res) => {
     name: user.name,
     username: user.username
   });
-
+  await logActivity({
+      userId: user.id,
+      action: "LOGIN",
+      entity: "user",
+      entityId: user.id,
+      description: `${user.name} logged into StoreBuddy.`
+  });
   res.json({
     token,
     user: safeUser,
@@ -159,17 +178,20 @@ app.get("/api/auth/me", authRequired, async (req, res) => {
 });
 
 app.get("/api/bootstrap", authRequired, async (_req, res) => {
-  const store = await readStore();
-  res.json({
-    meta: store.meta,
-    summary: summarize(store),
-    categories: store.categories,
-    products: store.products,
-    suppliers: store.suppliers,
-    purchaseOrders: store.purchaseOrders,
-    sales: store.sales,
-    users: store.users.map(sanitizeUser)
-  });
+    const store = await readStore();
+    const activityLogs = await getActivityLogs(100);
+
+    res.json({
+        meta: store.meta,
+        summary: summarize(store),
+        categories: store.categories,
+        products: store.products,
+        suppliers: store.suppliers,
+        purchaseOrders: store.purchaseOrders,
+        sales: store.sales,
+        users: store.users.map(sanitizeUser),
+        activityLogs
+    });
 });
 
 app.get("/api/dashboard", authRequired, async (_req, res) => {
@@ -199,7 +221,13 @@ app.post("/api/categories", authRequired, allowRoles("admin", "stock_handler"), 
     draft.categories.unshift(category);
     return draft;
   });
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "CATEGORY_CREATED",
+      entity: "category",
+      entityId: category.id,
+      description: `${req.auth.name} added category "${category.name}".`
+  });
   res.status(201).json(store.categories);
 });
 
@@ -210,7 +238,13 @@ app.put("/api/categories/:id", authRequired, allowRoles("admin", "stock_handler"
     );
     return draft;
   });
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "CATEGORY_UPDATED",
+      entity: "category",
+      entityId: req.params.id,
+      description: `${req.auth.name} updated category "${req.body.name}".`
+  });
   res.json(store.categories);
 });
 
@@ -237,7 +271,13 @@ app.delete(
     await deleteCategory(req.params.id);
 
     const categories = await getCategories();
-
+    await logActivity({
+        userId: req.auth.userId,
+        action: "CATEGORY_DELETED",
+        entity: "category",
+        entityId: req.params.id,
+        description: `${req.auth.name} deleted category "${category.name}".`
+    });
     res.json(categories);
   }
 );
@@ -269,7 +309,13 @@ app.post(
     };
 
     await createProduct(product);
-
+    await logActivity({
+        userId: req.auth.userId,
+        action: "PRODUCT_CREATED",
+        entity: "product",
+        entityId: product.id,
+        description: `${req.auth.name} added product "${product.name}".`
+    }); 
     const products = await getProducts();
 
     res.status(201).json(products);
@@ -297,7 +343,13 @@ app.put("/api/products/:id", authRequired, allowRoles("admin", "stock_handler"),
     );
     return draft;
   });
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "PRODUCT_UPDATED",
+      entity: "product",
+      entityId: req.params.id,
+      description: `${req.auth.name} updated product.`
+  });
   const products = await getProducts();
   res.json(products);
 });
@@ -314,7 +366,13 @@ app.delete("/api/products/:id", authRequired, allowRoles("admin"), async (req, r
 
     return draft;
   });
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "PRODUCT_DELETED",
+      entity: "product",
+      entityId: req.params.id,
+      description: `${req.auth.name} deleted a product.`
+  });
   const products = await getProducts();
   res.json(products);
 });
@@ -371,7 +429,13 @@ app.delete(
     await deleteUser(req.params.id);
 
     const users = await getUsers();
-
+    await logActivity({
+        userId: req.auth.userId,
+        action: "USER_DELETED",
+        entity: "user",
+        entityId: req.params.id,
+        description: `${req.auth.name} deleted user "${user.name}".`
+    });
     res.json(users);
   }
 );
@@ -400,7 +464,13 @@ app.delete(
     await deleteSupplier(req.params.id);
 
     const suppliers = await getSuppliers();
-
+    await logActivity({
+        userId: req.auth.userId,
+        action: "SUPPLIER_DELETED",
+        entity: "supplier",
+        entityId: req.params.id,
+        description: `${req.auth.name} deleted supplier "${supplier.name}".`
+    });
     res.json(suppliers);
   }
 );
@@ -429,7 +499,13 @@ app.post("/api/purchase-orders", authRequired, allowRoles("admin", "stock_handle
     draft.purchaseOrders.unshift(purchaseOrder);
     return draft;
   });
-
+  await logActivity({
+    userId: req.auth.userId,
+    action: "PURCHASE_ORDER_CREATED",
+    entity: "purchaseOrder",
+    entityId: purchaseOrder.id,
+    description: `${req.auth.name} created purchase order "${purchaseOrder.id}".`
+  });
   res.status(201).json(store.purchaseOrders);
 });
 
@@ -457,7 +533,13 @@ app.post(
 
       return draft;
     });
-
+    await logActivity({
+        userId: req.auth.userId,
+        action: "PURCHASE_ORDER_RECEIVED",
+        entity: "purchaseOrder",
+        entityId: purchaseOrder.id,
+        description: `${req.auth.name} received purchase order "${purchaseOrder.id}".`
+    });
     res.json({
       purchaseOrders: store.purchaseOrders,
       products: store.products
@@ -519,7 +601,13 @@ app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req,
   if (!store) {
     return;
   }
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "SALE_COMPLETED",
+      entity: "sale",
+      entityId: sale.id,
+      description: `${req.auth.name} completed Sale ${sale.id}.`
+  });
   res.status(201).json({
     sales: store.sales,
     products: store.products,
@@ -551,7 +639,13 @@ app.post("/api/users", authRequired, allowRoles("admin"), async (req, res) => {
     draft.users.unshift(user);
     return draft;
   });
-
+  await logActivity({
+      userId: req.auth.userId,
+      action: "USER_CREATED",
+      entity: "user",
+      entityId: user.id,
+      description: `${req.auth.name} added user "${user.name}".`
+  });
   res.status(201).json(store.users.map(sanitizeUser));
 });
 
@@ -574,6 +668,14 @@ app.put("/api/users/:id", authRequired, allowRoles("admin"), async (req, res) =>
     });
 
     return draft;
+  });
+
+  await logActivity({
+      userId: req.auth.userId,
+      action: "USER_UPDATED",
+      entity: "user",
+      entityId: req.params.id,
+      description: `${req.auth.name} updated user "${req.params.id}".`
   });
 
   res.json(store.users.map(sanitizeUser));
