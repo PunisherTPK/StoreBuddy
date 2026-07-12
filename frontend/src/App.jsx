@@ -1960,7 +1960,10 @@ function InventoryScreen({ busy,
                       title="Delete Product"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteDialog(row);
+                        setDeleteDialog({
+                            type: "product",
+                            data: row
+                        });
                       }}
                       className="flex h-9 w-9 items-center justify-center rounded-xl
                                 bg-red-500/10 text-red-500
