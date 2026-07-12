@@ -1404,6 +1404,44 @@ export async function getSales() {
   }
 }
 
+export async function getTopSellingProducts(limit = 5) {
+  await ensureStore();
+
+  const connection = await pool.getConnection();
+
+  try {
+    const [rows] = await connection.query(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.stock,
+        p.price,
+        p.reorder_level AS reorderLevel,
+        SUM(si.quantity) AS unitsSold
+      FROM products p
+      JOIN sale_items si ON si.product_id = p.id
+      WHERE p.active = TRUE
+      GROUP BY p.id, p.name, p.stock, p.price, p.reorder_level
+      ORDER BY unitsSold DESC
+      LIMIT ?
+      `,
+      [limit]
+    );
+
+    return rows.map((product) => ({
+      id: product.id,
+      name: product.name,
+      unitsSold: Number(product.unitsSold || 0),
+      stock: Number(product.stock || 0),
+      price: Number(product.price || 0),
+      reorderLevel: Number(product.reorderLevel || 0)
+    }));
+  } finally {
+    connection.release();
+  }
+}
+
 export async function createSale({ id, cashierId, paymentMethod, items }) {
   await ensureStore();
 

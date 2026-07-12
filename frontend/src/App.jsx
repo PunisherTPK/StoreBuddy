@@ -169,6 +169,7 @@ export default function App() {
   const themeMenuRef = useRef(null);
   const [activityLogs, setActivityLogs] = useState([]);
   const stockChartRef = useRef(null);
+  const [focusedProductId, setFocusedProductId] = useState("");
 
   const roleTabs = useMemo(
     () => tabs.filter((tab) => (user ? tab.roles.includes(user.role) : false)),
@@ -477,7 +478,7 @@ export default function App() {
 
       setBoot((current) => {
         const summary = summarizeLocal({ ...current, products: next }).summary;
-        return { ...current, products: next, summary };
+        return { ...current, products: next, summary, topSellingProducts: syncTopSellingProducts(current.topSellingProducts, next) };
       });
       setProductForm(emptyProduct());
       setProductModalOpen(false);
@@ -498,6 +499,7 @@ async function deleteProduct(product) {
         setBoot(current => ({
             ...current,
             products: next,
+            topSellingProducts: syncTopSellingProducts(current.topSellingProducts, next),
             summary: summarizeLocal({
                 ...current,
                 products: next
@@ -637,7 +639,8 @@ async function deleteSupplier(supplier) {
         ...current,
         products: response.products,
         sales: response.sales,
-        summary: response.summary
+        summary: response.summary,
+        topSellingProducts: response.topSellingProducts ?? syncTopSellingProducts(current.topSellingProducts, response.products)
       }));
       setCart([]);
       flash("Sale completed and stock updated.");
@@ -708,6 +711,7 @@ async function deleteSupplier(supplier) {
           ...current,
           purchaseOrders: response.purchaseOrders,
           products: response.products,
+          topSellingProducts: syncTopSellingProducts(current.topSellingProducts, response.products),
           summary
         };
       });
@@ -747,6 +751,12 @@ async function deleteSupplier(supplier) {
   function openEditProductModal(product) {
     setProductForm(product);
     setProductModalOpen(true);
+  }
+
+  function openProductInInventory(product) {
+    setFocusedProductId(product.id);
+    setGlobalSearch("");
+    setActiveTab("inventory");
   }
 
   function openNewSupplierModal() {
@@ -862,6 +872,8 @@ async function deleteSupplier(supplier) {
                     sales={recentSales} 
                     categories={boot.categories} 
                     activityLogs={activityLogs}
+                    topSellingProducts={boot.topSellingProducts ?? []}
+                    onProductSelect={openProductInInventory}
                     stockChartData={boot.stockChartData}
                     stockChartRef={stockChartRef}
                     categoryChartData={boot.categoryChartData} />
@@ -882,6 +894,7 @@ async function deleteSupplier(supplier) {
                       onNewProduct={openNewProductModal}
                       onSort={onSort}
                       products={sortedProducts}
+                      focusedProductId={focusedProductId}
                       sortConfig={sortConfig.products}
                       editingCategoryId={editingCategoryId}
                       setEditingCategoryId={setEditingCategoryId}
@@ -1640,7 +1653,7 @@ const chartColors = [
     "#4ADE80"  // Light Green
 ];
 
-function DashboardScreen({ products, sales, summary,categories,activityLogs,stockChartRef }) {
+function DashboardScreen({ products, sales, summary,categories,activityLogs,stockChartRef, topSellingProducts, onProductSelect }) {
   const cards = [
     { label: "Today's revenue", value: currency(summary.todayRevenue), accent: "text-blue-600" },
     { label: "Sales today", value: summary.todaySalesCount, accent: "text-slate-900" },
@@ -1728,6 +1741,36 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
       PURCHASE_ORDER_RECEIVED: "📥",
 
       SALE_COMPLETED: "🛒"
+  };
+
+  const topProductsForChart = (topSellingProducts ?? []).slice(0, 5);
+  const topSellingChartData = {
+      labels: topProductsForChart.map((product, index) => {
+          const rank = ["🥇", "🥈", "🥉"][index] || `#${index + 1}`;
+          return `${rank} ${product.name}`;
+      }),
+      datasets: [
+          {
+              label: "Units Sold",
+              data: topProductsForChart.map((product) => Number(product.unitsSold || 0)),
+              backgroundColor: topProductsForChart.map((product) => {
+                  const stock = Number(product.stock || 0);
+                  const reorderLevel = Number(product.reorderLevel || 0);
+
+                  if (stock === 0) {
+                      return "#EF4444";
+                  }
+
+                  if (stock <= reorderLevel) {
+                      return "#F97316";
+                  }
+
+                  return "#10B981";
+              }),
+              borderRadius: 8,
+              borderSkipped: false
+          }
+      ]
   };
 
   return (
@@ -1844,7 +1887,7 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
               </div>
           </div>
 
-          {/* Top Products */}
+          {/* Top Selling Products */}
           <div
               className="rounded-3xl p-6"
               style={{
@@ -1856,10 +1899,77 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
                   className="mb-4 text-lg font-semibold"
                   style={{ color: "var(--text-strong)" }}
               >
-                  Top Products
+                  Top Selling Products
               </h3>
 
-              Coming next...
+              {topProductsForChart.length ? (
+                <div className="h-64">
+                  <Bar
+                    data={topSellingChartData}
+                    options={{
+                      indexAxis: "y",
+                      maintainAspectRatio: false,
+                      onClick: (_event, elements) => {
+                        if (!elements.length) {
+                          return;
+                        }
+
+                        const product = topProductsForChart[elements[0].index];
+                        if (product) {
+                          onProductSelect?.(product);
+                        }
+                      },
+                      plugins: {
+                        legend: {
+                          display: false
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: (context) => {
+                              const product = topProductsForChart[context.dataIndex];
+                              const stock = Number(product?.stock || 0);
+                              const reorderLevel = Number(product?.reorderLevel || 0);
+                              const status = stock === 0 ? "Out of Stock" : stock <= reorderLevel ? "Low Stock" : "Healthy";
+                              return [
+                                `Sold: ${Number(product?.unitsSold || 0)}`,
+                                `Stock: ${stock}`,
+                                currency(product?.price),
+                                status
+                              ];
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          beginAtZero: true,
+                          ticks: {
+                            color: "#CBD5E1",
+                            precision: 0
+                          },
+                          grid: {
+                            color: "rgba(255,255,255,0.08)"
+                          }
+                        },
+                        y: {
+                          ticks: {
+                            color: "#CBD5E1",
+                            callback: function(value) {
+                              const label = this.getLabelForValue(value);
+                              return label.length > 28 ? `${label.slice(0, 28)}...` : label;
+                            }
+                          },
+                          grid: {
+                            display: false
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: "var(--text-faint)" }}>No sales available.</p>
+              )}
           </div>
 
       </div>
@@ -1999,6 +2109,7 @@ function InventoryScreen({ busy,
   onNewProduct, 
   onSort, 
   products, 
+  focusedProductId,
   sortConfig,
   onDeleteCategory,    
   editingCategoryId,
@@ -2011,6 +2122,21 @@ function InventoryScreen({ busy,
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+
+  useEffect(() => {
+    if (!focusedProductId) {
+      return;
+    }
+
+    const product = products.find((entry) => entry.id === focusedProductId);
+    if (product) {
+      setSearch(product.name);
+      setCategoryFilter("all");
+      setSupplierFilter("all");
+      setStockFilter("all");
+    }
+  }, [focusedProductId, products]);
+
   const filteredProducts = products.filter((product) => {
     const searchText = search.trim().toLowerCase();
 
@@ -2305,6 +2431,7 @@ function InventoryScreen({ busy,
               } 
             ]}
             onSort={(key) => onSort("products", key)}
+            rowClassName={(row) => row.id === focusedProductId ? "ring-1 ring-emerald-400/60 bg-emerald-500/10" : ""}
             rows={filteredProducts}
             sortConfig={sortConfig}
           />
@@ -3150,7 +3277,7 @@ function SectionCard({ id, action, children, className = "", contentClassName = 
   );
 }
 
-function DataTable({ columns, onRowClick, onSort, rows, sortConfig }) {
+function DataTable({ columns, onRowClick, onSort, rowClassName, rows, sortConfig }) {
   if (!rows.length) {
     return <EmptyState description="Once data exists, it will appear here in a cleaner grid." title="Nothing to show yet" />;
   }
@@ -3186,7 +3313,7 @@ function DataTable({ columns, onRowClick, onSort, rows, sortConfig }) {
           <tbody>
             {rows.map((row, index) => (
               <tr
-                className={onRowClick ? "cursor-pointer" : ""}
+                className={[onRowClick ? "cursor-pointer" : "", rowClassName?.(row) || ""].filter(Boolean).join(" ")}
                 key={row.id || row.key || index}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
@@ -3499,6 +3626,22 @@ function summarizeLocal(boot) {
       slowMoving: [...movement].sort((a, b) => a.sold - b.sold).slice(0, 5)
     }
   };
+}
+
+function syncTopSellingProducts(topSellingProducts = [], products = []) {
+  const productMap = new Map(products.map((product) => [product.id, product]));
+
+  return topSellingProducts
+    .filter((product) => productMap.has(product.id))
+    .map((product) => {
+      const current = productMap.get(product.id);
+      return {
+        ...product,
+        stock: current.stock,
+        price: current.price,
+        reorderLevel: current.reorderLevel
+      };
+    });
 }
 
 function groupSalesByDay(sales) {

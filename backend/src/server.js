@@ -41,6 +41,7 @@ import {
   createPurchaseOrder,
   receivePurchaseOrder,
   getSales,
+  getTopSellingProducts,
   createSale,
   exportBackup,
   restoreBackup,
@@ -199,10 +200,12 @@ app.get("/api/auth/me", authRequired, async (req, res) => {
 app.get("/api/bootstrap", authRequired, async (_req, res) => {
     const store = await readStore();
     const activityLogs = await getActivityLogs(100);
+    const topSellingProducts = await getTopSellingProducts(5);
 
     res.json({
         meta: store.meta,
         summary: summarize(store),
+        topSellingProducts,
         categories: store.categories,
         products: store.products,
         suppliers: store.suppliers,
@@ -215,7 +218,11 @@ app.get("/api/bootstrap", authRequired, async (_req, res) => {
 
 app.get("/api/dashboard", authRequired, async (_req, res) => {
   const store = await readStore();
-  res.json(summarize(store));
+  const topSellingProducts = await getTopSellingProducts(5);
+  res.json({
+    ...summarize(store),
+    topSellingProducts
+  });
 });
 
 app.get("/api/alerts/low-stock", authRequired, async (_req, res) => {
@@ -515,10 +522,12 @@ app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req,
       description: `${req.auth.name} completed Sale ${sale.id}.`
   });
   const store = await readStore();
+  const topSellingProducts = await getTopSellingProducts(5);
   res.status(201).json({
     sales: store.sales,
     products: store.products,
-    summary: summarize(store)
+    summary: summarize(store),
+    topSellingProducts
   });
 });
 

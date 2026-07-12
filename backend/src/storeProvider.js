@@ -41,6 +41,7 @@ export const getPurchaseOrders = store.getPurchaseOrders;
 export const createPurchaseOrder = store.createPurchaseOrder;
 export const receivePurchaseOrder = store.receivePurchaseOrder;
 export const getSales = store.getSales;
+export const getTopSellingProducts = store.getTopSellingProducts;
 export const createSale = store.createSale;
 export const exportBackup = store.exportBackup;
 export const restoreBackup = store.restoreBackup;
