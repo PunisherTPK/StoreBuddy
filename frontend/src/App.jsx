@@ -1397,7 +1397,7 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
                   className={
                     collapsed
                       ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
-                      : "flex h-40 w-40 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
+                      : "flex h-40 w-40 m-6 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
                   }
                   style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}
                 >
