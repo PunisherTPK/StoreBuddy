@@ -13,6 +13,14 @@ import {
   Title
 } from "chart.js";
 
+import {
+    Wallet,
+    ShoppingCart,
+    Package,
+    Truck,
+    TrendingUp
+} from "lucide-react";
+
 import { Doughnut, Bar } from "react-chartjs-2";
 
 ChartJS.register(
@@ -1655,10 +1663,11 @@ const chartColors = [
 
 function DashboardScreen({ products, sales, summary,categories,activityLogs,stockChartRef, topSellingProducts, onProductSelect }) {
   const cards = [
-    { label: "Today's revenue", value: currency(summary.todayRevenue), accent: "text-blue-600" },
-    { label: "Sales today", value: summary.todaySalesCount, accent: "text-slate-900" },
-    { label: "Products", value: summary.productCount, accent: "text-slate-900" },
-    { label: "Stock value", value: currency(summary.stockValue), accent: "text-emerald-600" }
+    { label: "Today's revenue", value: currency(summary.todayRevenue),icon: Wallet, accent: "text-blue-600" },
+    { label: "Today's profit", value: currency(summary.todayProfit),icon: TrendingUp, accent: "text-emerald-600" },
+    { label: "Sales today", value: summary.todaySalesCount, icon: ShoppingCart, accent: "text-slate-900" },
+    { label: "Products", value: summary.productCount, icon: Package, accent: "text-slate-900" },
+    { label: "Suppliers", value: summary.supplierCount,  icon: Truck, accent: "text-slate-600" },
   ];
 
   const categoryCounts = (categories ?? [])
@@ -1775,13 +1784,21 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
 
   return (
     <section className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {cards.map((card) => (
-          <div className="card p-5" key={card.label}>
-            <p className="text-sm text-slate-500">{card.label}</p>
-            <p className={`mt-3 text-3xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
-          </div>
-        ))}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div className="card p-3" key={card.label}>
+              <div className="flex items-center justify-between">
+                <Icon className={`h-15 w-15 ${card.accent}`} />
+                <div className="flex-1 justify-center text-center">
+                  <p className="text-sm text-slate-500">{card.label}</p>
+                  <p className={`mt-3 text-3xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
 

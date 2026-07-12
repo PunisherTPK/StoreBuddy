@@ -70,16 +70,39 @@ function getTodayIso() {
   const pad = (part) => String(part).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+function isSameLocalDay(dateValue, referenceDate) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
+  return (
+    date.getFullYear() === referenceDate.getFullYear() &&
+    date.getMonth() === referenceDate.getMonth() &&
+    date.getDate() === referenceDate.getDate()
+  );
+}
 
 function summarize(store) {
-  const today = getTodayIso();
-  const todaySales = store.sales.filter((sale) => sale.createdAt.startsWith(today));
+  const today = new Date();
+  const todaySales = store.sales.filter((sale) => isSameLocalDay(sale.createdAt, today));
   const todayRevenue = todaySales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+
+  let todayProfit = 0;
+
+  for (const sale of todaySales) {
+    for (const item of sale.items) {
+      const product = store.products.find(
+        (p) => p.id === item.productId
+      );
+
+      if (!product) continue;
+
+      todayProfit +=
+        (Number(item.price) - Number(product.costPrice || 0)) *
+        Number(item.quantity);
+    }
+  }
+
   const lowStockItems = store.products.filter((product) => Number(product.stock) <= Number(product.reorderLevel));
-  const stockValue = store.products.reduce(
-    (sum, product) => sum + Number(product.stock) * Number(product.costPrice || 0),
-    0
-  );
+
 
   const movement = new Map();
   for (const sale of store.sales) {
@@ -103,8 +126,8 @@ function summarize(store) {
     productCount: store.products.length,
     supplierCount: store.suppliers.length,
     lowStockCount: lowStockItems.length,
-    stockValue,
     lowStockItems,
+    todayProfit,
     fastMoving,
     slowMoving
   };
