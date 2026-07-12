@@ -2237,7 +2237,7 @@ function InventoryScreen({ busy,
             columns={[
               { key: "name", label: "Product", sortable: true },
               { key: "barcode", label: "Barcode", render: (row) => row.barcode || "-" },
-              { key: "sku", label: "SKU", render: (row) => row.sku || "-" },
+              {/* key: "sku", label: "SKU", render: (row) => row.sku || "-" */},
               {
                 key: "supplier",
                 label: "Supplier",
