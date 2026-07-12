@@ -44,7 +44,7 @@ const tabs = [
   { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"], icon: ChartIcon },
   { id: "users", label: "Users", roles: ["admin"], icon: UsersIcon },
   { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon },
-  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon }
+  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon/*,color: "#c7eb25", fontSize: "1.875rem"*/ }
 ];
 
 const demoAccounts = [
@@ -834,6 +834,7 @@ async function deleteSupplier(supplier) {
           <Sidebar
             activeTab={activeTab}
             collapsed={sidebarCollapsed}
+            onLogout={logout}
             onClose={() => setSidebarOpen(false)}
             onSelect={(tabId) => {
               setActiveTab(tabId);
@@ -1375,7 +1376,7 @@ function LoginScreen({ demoAccounts, error, loading, onSubmit }) {
   );
 }
 
-function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, open, tabs, user }) {
+function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, open, tabs, user,onLogout }) {
   return (
     <>
       <div
@@ -1383,7 +1384,7 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
         onClick={onClose}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-40 border-r p-4 transition-all duration-300 lg:static lg:translate-x-0 ${collapsed ? "w-[96px]" : "w-72"
+        className={`fixed inset-y-0 left-0 z-40 border-r p-4 transition-all duration-300 lg:static lg:translate-x-0 relative ${collapsed ? "w-[96px]" : "w-60"
           } ${open ? "translate-x-0" : "-translate-x-full"
           }`}
         style={{ background: "var(--sidebar-bg)", borderColor: "var(--sidebar-border)", backdropFilter: "blur(18px)" }}
@@ -1392,8 +1393,15 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
           <div className={`mb-6 ${collapsed ? "flex flex-col items-center gap-4" : "flex items-start justify-between"}`}>
             <div className={collapsed ? "flex flex-col items-center" : ""}>
               <div className="flex items-center gap-3">
-                <div className={collapsed ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm": "flex h-40 w-40 items-center justify-center rounded-2xl text-white shadow-sm"} style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}>
-                  <img src={storebuddyLogo2} alt="StoreBuddy Logo" className="h-250 w-250 object-contain"></img>
+                <div
+                  className={
+                    collapsed
+                      ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
+                      : "flex h-40 w-40 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
+                  }
+                  style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}
+                >
+                  <img src={storebuddyLogo2} alt="StoreBuddy Logo" className="h-full w-full object-contain" />
                 </div>
                 {/* Storebuddy in text 
                 <div className={collapsed ? "hidden" : "block"}>
@@ -1408,39 +1416,84 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
               </div>
             </div>
             <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
-              <button className="btn-secondary hidden px-3 py-2 lg:inline-flex" onClick={onToggleCollapsed} type="button">
-                {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-              </button>
               <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onClose} type="button">
                 <CloseIcon />
               </button>
             </div>
+            <button
+              className="absolute -right-3 top-8 hidden h-7 w-7 items-center justify-center rounded-full border shadow-md transition hover:scale-105 lg:flex"
+              onClick={onToggleCollapsed}
+              style={{
+                background: "var(--surface-1)",
+                borderColor: "var(--border-soft)",
+                color: "var(--text-soft)"
+              }}
+              type="button"
+            >
+              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            </button>
           </div>
+            <nav className="space-y-1.5">
+              {tabs.filter((tab) => tab.id !== "pos").map((tab) => {
+                const Icon = tab.icon;
+                const active = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm transition ${collapsed ? "justify-center" : "gap-3"} ${active ? "font-bold shadow-lg" : "font-medium"}`}
+                    style={
+                      active
+                        ? {
+                            background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))",
+                            color: "#ffffff",
+                            boxShadow: "0 6px 14px rgba(var(--accent-rgb), 0.35)",
+                            //borderLeft: "4px solid #8f1616" 
+                          }                            
+                        : { color: "var(--text-soft)" }
+                    }
+                    onClick={() => onSelect(tab.id)}
+                    type="button"
+                  >
+                    <Icon />
+                    <span className={collapsed ? "hidden" : "block"}>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-          <nav className="space-y-1.5">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
+            {(() => {
+              const posTab = tabs.find((tab) => tab.id === "pos");
+              const Icon = posTab.icon;
+              const posActive = activeTab === "pos";
               return (
-                <button
-                  key={tab.id}
-                  className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${collapsed ? "justify-center" : "gap-3"} ${active ? "text-white shadow-sm" : ""
-                    }`}
-                  style={
-                    active
-                      ? { background: "var(--nav-active-bg)" }
-                      : { color: "var(--text-soft)" }
-                  }
-                  onClick={() => onSelect(tab.id)}
-                  type="button"
-                >
-                  <Icon />
-                  <span className={collapsed ? "hidden" : "block"}>{tab.label}</span>
-                </button>
+                <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border-soft)" }}>
+                  <button
+                    onClick={() => onSelect("pos")}
+                    type="button"
+                    className={`flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-bold shadow-md transition hover:scale-[1.02] active:scale-[0.98] ${collapsed ? "justify-center" : "gap-3"}`}
+                    style={{
+                      background: posActive
+                        ? "linear-gradient(135deg, #bef264, #65a30d)"
+                        : "linear-gradient(135deg, #a3e635, #4d7c0f)",
+                      color: "#0a0f1c"
+                    }}
+                  >
+                    <Icon />
+                    <span className={collapsed ? "hidden" : "block"}>{posTab.label}</span>
+                  </button>
+                </div>
               );
-            })}
-          </nav>
-        </div>
+            })()}
+
+            <button
+              className={`group mt-auto flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm font-medium transition-all duration-200 hover:gap-3 text-[var(--text-soft)] hover:text-red-400 ${collapsed ? "justify-center" : "gap-3"}`}
+              onClick={onLogout}
+              type="button"
+            >
+              <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
+              <span className={collapsed ? "hidden" : "block"}>Sign out</span>
+            </button>
+          </div>
       </aside>
     </>
   );
@@ -1622,15 +1675,6 @@ function TopBar({
               ) : null}
             </div>
             */}
-
-            <button
-              className="btn-secondary group inline-flex items-center gap-2 transition-all duration-200 hover:gap-3 hover:text-red-400"
-              onClick={onLogout}
-              type="button"
-            >
-              <LogOut className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              Sign out
-            </button>
           </div>
         </div>
       </div>
