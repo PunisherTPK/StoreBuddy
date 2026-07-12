@@ -167,7 +167,8 @@ export default function App() {
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
     sales: { key: "createdAt", direction: "desc" },
-    users: { key: "name", direction: "asc" }
+    users: { key: "name", direction: "asc" },
+    suppliers: { key: "name", direction: "asc" }
   });
   const [toasts, setToasts] = useState([]);
 
@@ -245,6 +246,10 @@ export default function App() {
   const sortedProducts = useMemo(() => {
     return sortRows(filteredProducts, sortConfig.products);
   }, [filteredProducts, sortConfig.products]);
+
+  const sortedSuppliers = useMemo(() => {
+    return sortRows(filteredSuppliers, sortConfig.suppliers);
+  }, [filteredSuppliers, sortConfig.suppliers]);
 
   const sortedUsers = useMemo(() => {
     return sortRows(filteredUsers, sortConfig.users);
@@ -921,7 +926,10 @@ async function deleteSupplier(supplier) {
                       onNewSupplier={openNewSupplierModal}
                       onDeleteSupplier={deleteSupplier}
                       setDeleteDialog={setDeleteDialog}
-                      suppliers={filteredSuppliers}
+                      //suppliers={filteredSuppliers}
+                      suppliers={sortedSuppliers}
+                      onSort={onSort}
+                      sortConfig={sortConfig}
                     />
                   </ScreenScrollArea>
                 ) : null}
@@ -2647,7 +2655,7 @@ function InventoryScreen({ busy,
   );
 }
 
-function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers, onDeleteSupplier,setDeleteDialog }) {
+function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers, onDeleteSupplier, setDeleteDialog, onSort, sortConfig }) {
   return (
     <section className="space-y-6">
       <SectionCard
@@ -2656,56 +2664,65 @@ function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers, onDeleteSup
             Add supplier
           </button>
         }
-        subtitle="Supplier records are shown as readable cards for faster contact lookup."
+        subtitle="Supplier records shown as a sortable table for quick scanning."
         title="Supplier Directory"
       >
         {suppliers.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {suppliers.map((supplier) => (
-              <button
-                className="card p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md"
-                key={supplier.id}
-                onClick={() => onEditSupplier(supplier)}
-                type="button"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-slate-900">{supplier.name}</h3>
-                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">Supplier</span>
-                  <button
-                    type="button"
-                    title="Delete Supplier"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl
-                              bg-red-500/10 text-red-500 transition-all
-                              hover:scale-105 hover:bg-red-500 hover:text-white"
+          <DataTable
+            columns={[
+              { key: "name", label: "Name", sortable: true },
+              { key: "contactPerson", label: "Contact", render: (row) => row.contactPerson || "-" },
+              { key: "phone", label: "Phone", render: (row) => row.phone || "-" },
+              { key: "email", label: "Email", render: (row) => row.email || "-" },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (row) => (
+                  <div className="flex items-center justify-left gap-2">
+                    <button
+                      type="button"
+                      title="Edit Supplier"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditSupplier(row);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-sky-500/10 text-sky-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-sky-500
+                                hover:text-white"
+                    >
+                      <PencilIcon />
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Delete Supplier"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteDialog({
                           type: "supplier",
-                          data: supplier
+                          data: row
                         });
                       }}
-
-                  >
-                    <TrashIcon />
-                  </button>
-                </div>
-                <dl className="mt-4 space-y-2 text-sm text-slate-600">
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-slate-400">Contact</dt>
-                    <dd>{supplier.contactPerson || "-"}</dd>
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-red-500/10 text-red-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-red-500
+                                hover:text-white"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-slate-400">Phone</dt>
-                    <dd>{supplier.phone || "-"}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-slate-400">Email</dt>
-                    <dd className="truncate">{supplier.email || "-"}</dd>
-                  </div>
-                </dl>
-              </button>
-            ))}
-          </div>
+                )
+              }
+            ]}
+            onSort={(key) => onSort("suppliers", key)}
+            rows={suppliers}
+            sortConfig={sortConfig.suppliers}
+          />
         ) : (
           <EmptyState
             description="Create your first supplier to start replenishment workflows."
@@ -2718,9 +2735,14 @@ function SuppliersScreen({ onEditSupplier, onNewSupplier, suppliers, onDeleteSup
 }
 
 function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, products, purchaseOrders, suppliers }) {
+  const orderTotal = form.items.reduce(
+    (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.costPrice) || 0),
+    0
+  );
+
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-      <SectionCard subtitle="Create clean purchase orders with fewer clicks." title="Create Purchase Order">
+    <section className="grid items-stretch gap-6 xl:grid-cols-2">
+      <SectionCard className="min-h-[60vh]" subtitle="" title="Create Purchase Order">
         <form className="space-y-5" onSubmit={onSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Supplier">
@@ -2752,7 +2774,6 @@ function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, produ
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Order lines</h3>
-                <p className="text-sm text-slate-500">Select products, quantity, and latest supplier cost.</p>
               </div>
               <button
                 className="btn-secondary"
@@ -2763,37 +2784,72 @@ function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, produ
               </button>
             </div>
 
+            <div className="hidden gap-3 px-4 text-xs font-medium uppercase tracking-wide text-slate-400 md:grid md:grid-cols-[1.6fr_0.7fr_0.8fr_0.8fr_auto]">
+              <span>Product</span>
+              <span>Qty</span>
+              <span>Unit cost</span>
+              <span>Line total</span>
+              <span></span>
+            </div>
+
             <div className="space-y-3">
-              {form.items.map((item, index) => (
-                <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1.6fr_0.7fr_0.8fr]" key={`po-item-${index}`}>
-                  <select
-                    className="input"
-                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "productId", event.target.value)}
-                    value={item.productId}
+              {form.items.map((item, index) => {
+                const lineTotal = (Number(item.quantity) || 0) * (Number(item.costPrice) || 0);
+                return (
+                  <div
+                    className="grid items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1.6fr_0.7fr_0.8fr_0.8fr_auto]"
+                    key={`po-item-${index}`}
                   >
-                    <option value="">Select product</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input"
-                    min="1"
-                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "quantity", event.target.value)}
-                    type="number"
-                    value={item.quantity}
-                  />
-                  <input
-                    className="input"
-                    min="0"
-                    onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "costPrice", event.target.value)}
-                    type="number"
-                    value={item.costPrice}
-                  />
-                </div>
-              ))}
+                    <select
+                      className="input"
+                      onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "productId", event.target.value)}
+                      value={item.productId}
+                    >
+                      <option value="">Select product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      min="1"
+                      onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "quantity", event.target.value)}
+                      type="number"
+                      value={item.quantity}
+                    />
+                    <input
+                      className="input"
+                      min="0"
+                      onChange={(event) => updatePurchaseOrderItem(onChange, form, index, "costPrice", event.target.value)}
+                      type="number"
+                      value={item.costPrice}
+                    />
+                    <span className="text-sm font-semibold text-slate-700">{currency(lineTotal)}</span>
+                    <button
+                      type="button"
+                      title="Remove line"
+                      onClick={() => removePurchaseOrderItem(onChange, form, index)}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl
+                                bg-red-500/10 text-red-500
+                                transition-all duration-200
+                                hover:scale-105
+                                hover:bg-red-500
+                                hover:text-white"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 pt-3">
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Order total</p>
+                <p className="text-lg font-bold text-slate-900">{currency(orderTotal)}</p>
+              </div>
             </div>
           </div>
 
@@ -2803,24 +2859,41 @@ function OrdersScreen({ busyKey, form, onChange, onReceiveOrder, onSubmit, produ
         </form>
       </SectionCard>
 
-      <SectionCard subtitle="Receive pending orders directly from the list." title="Order Tracking">
+      <SectionCard
+        className="h-180"
+        contentClassName="flex-1 overflow-y-auto pr-1"
+        title="Order Tracking"
+      >
         {purchaseOrders.length ? (
           <div className="space-y-3">
             {purchaseOrders.map((order) => {
               const supplier = suppliers.find((entry) => entry.id === order.supplierId);
               const pending = order.status === "pending";
+              const total = order.items.reduce(
+                (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.costPrice) || 0),
+                0
+              );
               return (
                 <div className="card p-4" key={order.id}>
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-900">{order.id}</p>
-                      <p className="text-sm text-slate-500">{supplier?.name || "Unknown supplier"}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                        <ClipboardIcon />
+                      </span>
+                      <div>
+                        <p className="font-semibold text-slate-900">{order.id}</p>
+                        <p className="text-sm text-slate-500">{supplier?.name || "Unknown supplier"}</p>
+                      </div>
                     </div>
                     <StatusPill tone={pending ? "warning" : "success"}>{order.status}</StatusPill>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
                     <span>{order.items.length} line items</span>
                     <span>{formatDateTime(order.createdAt)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+                    <span className="text-xs uppercase tracking-wide text-slate-400">Total</span>
+                    <span className="font-semibold text-slate-900">{currency(total)}</span>
                   </div>
                   {pending ? (
                     <button
@@ -3752,6 +3825,11 @@ function updatePurchaseOrderItem(setForm, form, index, field, value) {
     itemIndex === index ? { ...item, [field]: value } : item
   );
   setForm({ ...form, items });
+}
+
+function removePurchaseOrderItem(setForm, form, index) {
+  const items = form.items.filter((_, itemIndex) => itemIndex !== index);
+  setForm({ ...form, items: items.length ? items : [{ productId: "", quantity: 1, costPrice: 0 }] });
 }
 
 function sortRows(rows, config) {
