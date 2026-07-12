@@ -1973,74 +1973,74 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
           </div>
 
       </div>
-
-      <div
+      {/* Recent Activity Logs */}
+      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div
           className="rounded-3xl p-6 mt-6"
           style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border-soft)"
+            background: "var(--surface-1)",
+            border: "1px solid var(--border-soft)"
           }}
-      >
+        >
           <h3
-              className="text-lg font-semibold mb-5"
-              style={{ color: "var(--text-strong)" }}
+            className="text-lg font-semibold mb-5"
+            style={{ color: "var(--text-strong)" }}
           >
-              Recent Activity
+            Recent Activity
           </h3>
 
-          <div className="space-y-3">
-
-              {(activityLogs ?? []).slice(0, 10).map((log) => (
-
-                  <div
-                      key={log.id}
-                      className="flex items-center justify-between rounded-xl px-3 py-2 transition-all hover:bg-white/5"
-                  >
-                      <div
-                          className="w-50 text-xs shrink-0"
-                          style={{ color: "var(--text-muted)" }}
-                      >
-                        {new Date(log.createdAt).toLocaleString()}
-                      </div>
-                      <div className="flex-1 flex items-center gap-3">
-
-                          <div className="text-base">
-                              {activityIcons[log.action] ?? "📌"}
-                          </div>
-
-                          <div>
-
-                              <div
-                                  className="text-sm font-medium leading-5"
-                                  style={{ color: "var(--text-strong)" }}
-                              >
-                                  {log.description}
-                              </div>
-
-                              <div
-                                  className="text-xs uppercase tracking-wider"
-                                  style={{ color: "var(--text-muted)" }}
-                              >
-                                  {log.action.replaceAll("_", " ")}
-                              </div>
-
-                          </div>
-
-                      </div>
-
-
+          <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
+            {(activityLogs ?? []).slice(0, 10).map((log) => (
+              <div
+                key={log.id}
+                className="flex items-center justify-between rounded-xl px-3 py-2 transition-all hover:bg-white/5"
+              >
+                <div
+                  className="w-50 text-xs shrink-0"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {new Date(log.createdAt).toLocaleString()}
+                </div>
+                <div className="flex-1 flex items-center gap-3">
+                  <div className="text-base">
+                    {activityIcons[log.action] ?? "📌"}
                   </div>
-
-              ))}
-
+                  <div>
+                    <div
+                      className="text-sm font-medium leading-5"
+                      style={{ color: "var(--text-strong)" }}
+                    >
+                      {log.description}
+                    </div>
+                    <div
+                      className="text-xs uppercase tracking-wider"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {log.action.replaceAll("_", " ")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-      </div>
+        <div
+          className="rounded-3xl p-6 mt-6"
+          style={{
+            background: "var(--surface-1)",
+            border: "1px solid var(--border-soft)"
+          }}
+        >
+          <h3
+            className="text-lg font-semibold mb-5"
+            style={{ color: "var(--text-strong)" }}
+          >
+            Low stock alerts
+          </h3>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <SectionCard id="low-stock-alerts" title="Low stock alerts" subtitle="Products that need replenishment soon.">
           {summary.lowStockItems.length ? (
-            <div className="space-y-3">
+            <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
               {summary.lowStockItems.map((product) => (
                 <div
                   className="flex items-center justify-between rounded-2xl border px-4 py-3"
@@ -2051,8 +2051,12 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
                   }}
                 >
                   <div>
-                    <p className="font-medium text-slate-900">{product.name}</p>
-                    <p className="text-sm text-slate-500">Reorder at {product.reorderLevel}</p>
+                    <p className="font-medium" style={{ color: "var(--text-strong)" }}>
+                      {product.name}
+                    </p>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                      Reorder at {product.reorderLevel}
+                    </p>
                   </div>
                   <StatusPill tone={Number(product.stock) === 0 ? "danger" : "warning"}>
                     {product.stock} left
@@ -2066,15 +2070,22 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
               title="No urgent stock alerts"
             />
           )}
-        </SectionCard>
+        </div>
+      </div>
+
+
+      <div className="grid gap-6 xl:grid-cols-1">
+        
 
         <SectionCard title="Recent sales" subtitle="Most recent completed transactions.">
           <DataTable
             columns={[
+              { key: "createdAt", label: "Time", render: (row) => formatDateTime(row.createdAt) },
+              {key: "cashier", label: "Cashier", render: (row) => row.cashier?.name || "N/A"},
               { key: "id", label: "Sale" },
               { key: "items", label: "Items", render: (row) => row.items.reduce((sum, item) => sum + item.quantity, 0) },
               { key: "total", label: "Total", render: (row) => currency(row.total) },
-              { key: "createdAt", label: "Time", render: (row) => formatDateTime(row.createdAt) }
+
             ]}
             rows={sales}
           />
