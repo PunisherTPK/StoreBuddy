@@ -1405,7 +1405,7 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
                   className={
                     collapsed
                       ? "flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
-                      : "flex h-40 w-40 m-6 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
+                      : "flex h-40 w-40 m-1 ml-5 items-center justify-center rounded-2xl text-white shadow-sm transition-all duration-300 ease-out"
                   }
                   style={{ background: "linear-gradient(135deg, var(--accent-500), var(--accent-700))" }}
                 >
@@ -1842,10 +1842,10 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
           return (
             <div className="card p-3" key={card.label}>
               <div className="flex items-center justify-between">
-                <Icon className={`h-15 w-15 ${card.accent}`} />
+                <Icon className={`h-10 w-10 ${card.accent}`} />
                 <div className="flex-1 justify-center text-center">
                   <p className="text-sm text-slate-500">{card.label}</p>
-                  <p className={`mt-3 text-3xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
+                  <p className={`mt-1 text-3xl font-semibold tracking-tight ${card.accent}`}>{card.value}</p>
                 </div>
               </div>
             </div>
