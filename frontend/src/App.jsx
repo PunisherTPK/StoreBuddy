@@ -33,6 +33,7 @@ ChartJS.register(
   Title
 );
 
+import MonthlyReport from "./components/MonthlyReport";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -3181,11 +3182,7 @@ function ReportsScreen({ boot }) {
         </SectionCard>
       ) : null}
 
-      {reportView === "monthly" ? (
-        <SectionCard subtitle="Built next." title="Monthly Report">
-          <EmptyState description="This report is being built next." title="Coming soon" />
-        </SectionCard>
-      ) : null}
+      {reportView === "monthly" ? <MonthlyReport boot={boot} onRefresh={() => loadBootstrap(token)} /> : null}
     </section>
   );
 }
