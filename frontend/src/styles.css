@@ -246,6 +246,47 @@ html[data-accent="rose"] {
   }
 }
 
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .receipt-print-root,
+  .receipt-print-root * {
+    visibility: visible !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+
+  .receipt-print-root {
+    width: 80mm !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+  }
+
+  .receipt-print-root img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .receipt-actions,
+  .receipt-actions * {
+    display: none !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+}
+
 @layer utilities {
   .bg-slate-50 { background-color: var(--surface-3) !important; }
   .bg-slate-100 { background-color: rgba(var(--accent-rgb), 0.08) !important; }

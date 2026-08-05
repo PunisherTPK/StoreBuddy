@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useReactToPrint } from "react-to-print";
 import storebuddyLogo from "../src/logo2.jpeg";
 import storebuddyLogo2 from "../src/storebuddy_logo2.png";
 import { LogOut } from "lucide-react";
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { Doughnut, Bar } from "react-chartjs-2";
+import ReceiptPrint from "./ReceiptPrint.jsx";
 
 ChartJS.register(
   ArcElement,
@@ -729,6 +731,7 @@ async function deleteSupplier(supplier) {
   function startNewSale() {
     setReceiptSale(null);
     setCart([]);
+    setPaymentForm({ method: "cash", amountReceived: "" });
     setGlobalSearch("");
     window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
   }
@@ -3723,88 +3726,62 @@ function PaymentDialog({ busy, cart, form, onCancel, onChange, onContinue, open 
 
 function ReceiptDialog({ branding, onClose, onNewSale, onPrinted, sale }) {
   const [printing, setPrinting] = useState(false);
+  const receiptRef = useRef(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: receiptRef,
+    documentTitle: `StoreBuddy Receipt ${sale?.id || ""}`,
+    pageStyle: `@page { size: auto; margin: 8mm; } body { background: #ffffff; color: #000000; }`,
+    onBeforePrint: async () => {
+      setPrinting(true);
+    },
+    onAfterPrint: () => {
+      setPrinting(false);
+      onPrinted?.();
+    },
+    ignoreGlobalStyles: true,
+    preserveAfterPrint: false
+  });
+
   useEffect(() => {
     if (!sale || !branding.autoPrintAfterSale) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      window.print();
-      onPrinted?.();
-    }, 180);
+      handlePrint?.();
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, [branding.autoPrintAfterSale, onPrinted, sale]);
+  }, [branding.autoPrintAfterSale, handlePrint, sale]);
 
   if (!sale) {
     return null;
   }
 
-  const printLogo = branding.printStoreLogo && (branding.storeLogo || storebuddyLogo);
-  const printReceipt = () => {
-    setPrinting(true);
-    window.setTimeout(() => {
-      window.print();
-      onPrinted?.();
-      setPrinting(false);
-    }, 80);
-  };
-
   return (
     <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #receipt-preview, #receipt-preview * { visibility: visible; }
-          #receipt-preview { position: absolute; left: 0; top: 0; width: ${branding.paperWidth || "80mm"}; box-shadow: none !important; border: 0 !important; }
-          .receipt-actions { display: none !important; }
-        }
-      `}</style>
       <div className="card max-h-[92vh] w-full max-w-md overflow-y-auto p-6">
-        <div id="receipt-preview" className="rounded-2xl bg-white p-5 text-slate-950">
-          <div className="text-center">
-            {printLogo ? <img className="mx-auto mb-2 h-16 w-16 object-contain" src={branding.storeLogo || storebuddyLogo} alt={branding.storeName} /> : null}
-            <h3 className="text-lg font-bold">{branding.storeName}</h3>
-            {branding.printStoreAddress && branding.businessAddress ? <p className="text-xs">{branding.businessAddress}</p> : null}
-            {branding.printPhoneNumber && branding.phoneNumber ? <p className="text-xs">Phone: {branding.phoneNumber}</p> : null}
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-2xl font-semibold" style={{ color: "var(--text-strong)" }}>
+              Receipt Preview
+            </h3>
+            <p className="text-sm" style={{ color: "var(--text-faint)" }}>
+
+            </p>
           </div>
-          <div className="my-4 border-t border-dashed border-slate-300" />
-          <div className="space-y-1 text-xs">
-            <p>Invoice: {sale.id}</p>
-            {branding.printDateTime ? <p>Date: {new Date(sale.createdAt).toLocaleString()}</p> : null}
-            {branding.printCashierName ? <p>Cashier: {sale.cashierName || sale.cashierId}</p> : null}
-            <p>Payment: {String(sale.paymentMethod || "").replace("_", " ")}</p>
-          </div>
-          <div className="my-4 border-t border-dashed border-slate-300" />
-          <div className="space-y-2 text-xs">
-            {(sale.items || []).map((item) => (
-              <div key={`${sale.id}-${item.productId}`}>
-                <div className="flex justify-between gap-2 font-medium">
-                  <span>{item.name}</span>
-                  <span>{currency(item.price * item.quantity)}</span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>{item.quantity} x {currency(item.price)}</span>
-                  {branding.printBarcode ? <span>{item.productId}</span> : null}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="my-4 border-t border-dashed border-slate-300" />
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between"><span>Subtotal</span><span>{currency(sale.subtotal)}</span></div>
-            <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>{currency(sale.total)}</span></div>
-            {sale.paymentMethod === "cash" ? (
-              <>
-                <div className="flex justify-between"><span>Cash Received</span><span>{currency(sale.cashReceived)}</span></div>
-                <div className="flex justify-between"><span>Balance</span><span>{currency(sale.balance)}</span></div>
-              </>
-            ) : null}
-          </div>
-          {branding.receiptFooter ? <p className="mt-5 text-center text-xs">{branding.receiptFooter}</p> : null}
+
         </div>
-        <div className="receipt-actions mt-5 grid gap-3 sm:grid-cols-3">
-          <button className="btn-primary" disabled={printing} onClick={printReceipt} type="button">{printing ? "Printing..." : "Print Receipt"}</button>
-          <button className="btn-secondary" onClick={onNewSale} type="button">New Sale</button>
+
+        <ReceiptPrint ref={receiptRef} branding={branding} sale={sale} />
+
+        <div className="receipt-actions mt-5 grid gap-3 sm:grid-cols-2">
+          <button className="btn-primary" disabled={printing} onClick={handlePrint} type="button">
+            {printing ? "Printing..." : "Print Receipt"}
+          </button>
+          <button className="btn-secondary" onClick={onNewSale} type="button">
+            New Sale
+          </button>
         </div>
       </div>
     </div>
