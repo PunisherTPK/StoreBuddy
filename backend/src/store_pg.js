@@ -372,6 +372,23 @@ function toIso(value) {
   return value ? new Date(value).toISOString() : null;
 }
 
+function normalizeBooleanMeta(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 async function readMeta(connection) {
   await createMetaTable(connection);
   const { rows } = await connection.query("SELECT meta_key, meta_value FROM app_meta");
@@ -380,7 +397,7 @@ async function readMeta(connection) {
   for (const row of rows) {
     const value = row.meta_value;
     if (["printStoreLogo", "printStoreAddress", "printPhoneNumber", "printCashierName", "printDateTime", "printBarcode", "autoPrintAfterSale"].includes(row.meta_key)) {
-      meta[row.meta_key] = value === "true" || value === true;
+      meta[row.meta_key] = normalizeBooleanMeta(value);
     } else {
       meta[row.meta_key] = value;
     }

@@ -1,7 +1,9 @@
 import "dotenv/config";
 
+import fs from "node:fs/promises";
 import express from "express";
 import cors from "cors";
+import multer from "multer";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,6 +64,34 @@ const APP_VERSION = process.env.npm_package_version || "1.0.0";
 
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
+
+const uploadDir = path.join(__dirname, "..", "public", "uploads");
+await fs.mkdir(uploadDir, { recursive: true });
+
+const logoStorage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (_req, file, cb) => {
+    const originalName = file.originalname || "logo";
+    const safeName = originalName.replace(/[^a-z0-9.\-_]/gi, "").toLowerCase();
+    const ext = path.extname(safeName) || path.extname(originalName) || ".png";
+    const base = path.basename(safeName, ext).slice(0, 20) || "store-logo";
+    cb(null, `${base}-${Date.now()}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage: logoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Invalid image type. Only PNG, JPEG, and WEBP are allowed."));
+    }
+    cb(null, true);
+  }
+});
+
+app.use("/uploads", express.static(uploadDir));
 
 function sanitizeUser(user) {
   const { passwordHash, ...safeUser } = user;
@@ -279,6 +309,30 @@ app.put("/api/settings", authRequired, allowRoles("admin"), async (req, res) => 
     activityLogs: await getActivityLogs(100)
   });
 });
+
+app.post(
+  "/api/settings/logo",
+  authRequired,
+  allowRoles("admin"),
+  upload.single("logo"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No logo file uploaded. Use field name 'logo'." });
+    }
+
+    const storeLogoPath = `/uploads/${req.file.filename}`;
+    const meta = await updateMeta({ storeLogo: storeLogoPath });
+    await logActivity({
+      userId: req.auth.userId,
+      action: "STORE_LOGO_UPLOADED",
+      entity: "settings",
+      entityId: "storeLogo",
+      description: `${req.auth.name} uploaded a new store logo.`
+    });
+
+    res.status(201).json({ storeLogo: storeLogoPath, meta });
+  }
+);
 
 app.get("/api/dashboard", authRequired, async (_req, res) => {
   const store = await readStore();
@@ -689,7 +743,22 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
+app.use((err, _req, res, _next) => {
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ message: "Logo file is too large. Maximum size is 2MB." });
+  }
 
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (err) {
+    return res.status(400).json({ message: err.message || "Upload failed." });
+  }
+
+  _next();
+});
+ 
 app.listen(PORT, () => {
   console.log(`StoreBuddy backend running on http://localhost:${PORT}`);
 });

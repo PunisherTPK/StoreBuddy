@@ -197,6 +197,8 @@ export default function App() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ method: "cash", amountReceived: "" });
   const [receiptSale, setReceiptSale] = useState(null);
+  const [logoUploadBusy, setLogoUploadBusy] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState("");
   const isPos = activeTab === "pos" && canAccessModule(user, "pos");
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [sortConfig, setSortConfig] = useState({
@@ -380,6 +382,81 @@ export default function App() {
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 3200);
+  }
+
+  async function uploadStoreLogo(file) {
+    setLogoUploadError("");
+    setLogoUploadBusy(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+
+      const response = await fetch(`${API_URL || ""}/api/settings/logo`, {
+        method: "POST",
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.message || "Upload failed.");
+      }
+
+      const data = await response.json();
+      setSettingsForm((current) => ({ ...current, storeLogo: data.storeLogo }));
+      setBoot((current) => ({
+        ...current,
+        meta: { ...current.meta, storeLogo: data.storeLogo }
+      }));
+      flash("Store logo uploaded.");
+    } catch (uploadError) {
+      const message = uploadError?.message || "Upload failed.";
+      setLogoUploadError(message);
+      pushToast(message, "error");
+    } finally {
+      setLogoUploadBusy(false);
+    }
+  }
+
+  function handleLogoFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+      const message = "Please choose a PNG, JPEG, or WEBP image.";
+      setLogoUploadError(message);
+      pushToast(message, "error");
+      event.target.value = "";
+      return;
+    }
+
+    uploadStoreLogo(file);
+    event.target.value = "";
+  }
+
+  async function clearStoreLogo() {
+    await runAction("save-settings", async () => {
+      await api(
+        "/api/settings",
+        {
+          method: "PUT",
+          body: JSON.stringify({ storeLogo: "" })
+        },
+        token
+      );
+
+      setSettingsForm((current) => ({ ...current, storeLogo: "" }));
+      setBoot((current) => ({
+        ...current,
+        meta: { ...current.meta, storeLogo: "" }
+      }));
+      flash("Store logo cleared.");
+    });
   }
 
   function flash(text) {
@@ -1111,6 +1188,10 @@ async function deleteSupplier(supplier) {
                       system={boot.system}
                       user={user}
                       totals={boot}
+                      logoUploadBusy={logoUploadBusy}
+                      logoUploadError={logoUploadError}
+                      onLogoFileChange={handleLogoFileChange}
+                      onLogoClear={clearStoreLogo}
                     />
                   </ScreenScrollArea>
                 ) : null}
@@ -3569,16 +3650,50 @@ function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users, onDelet
   );
 }
 
-function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExport, onFormChange, onRestore, onSave, system, user, totals }) {
+function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExport, onFormChange, onRestore, onSave, system, user, totals, logoUploadBusy, logoUploadError, onLogoFileChange, onLogoClear }) {
   const update = (key, value) => onFormChange({ ...form, [key]: value });
   const info = system || {};
+  const currentLogo = form.storeLogo || "";
 
   return (
     <form className="space-y-6" onSubmit={onSave}>
       <SectionCard title="Store Information" subtitle="Branding used across dashboard, POS, reports, and receipts.">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Store Logo">
-            <input className="input" placeholder="Image URL or data URL" value={form.storeLogo || ""} onChange={(event) => update("storeLogo", event.target.value)} />
+            <div className="space-y-3">
+              <label className="block">
+                <span className="sr-only">Upload store logo</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="input"
+                  onChange={onLogoFileChange}
+                  disabled={logoUploadBusy}
+                />
+              </label>
+
+              {currentLogo ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <img
+                    src={currentLogo}
+                    alt="Logo preview"
+                    className="h-20 w-20 rounded-xl border object-contain"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={onLogoClear}
+                  >
+                    Remove logo
+                  </button>
+                </div>
+              ) : (
+                <div className="text-sm text-muted">Upload a store logo to use on receipts and branding.</div>
+              )}
+
+              {logoUploadBusy && <div className="text-sm text-indigo-600">Uploading logo...</div>}
+              {logoUploadError && <div className="text-sm text-red-500">{logoUploadError}</div>}
+            </div>
           </Field>
           <Field label="Store Name">
             <input className="input" value={form.storeName || ""} onChange={(event) => update("storeName", event.target.value)} />
