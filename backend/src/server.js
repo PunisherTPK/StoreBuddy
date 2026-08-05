@@ -46,7 +46,8 @@ import {
   exportBackup,
   restoreBackup,
   logActivity,
-  getActivityLogs
+  getActivityLogs,
+  updateMeta
 } from "./storeProvider.js";
 
 
@@ -56,6 +57,8 @@ const PORT = process.env.PORT || 4000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
+const startedAt = Date.now();
+const APP_VERSION = process.env.npm_package_version || "1.0.0";
 
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
@@ -167,7 +170,12 @@ app.get(
 
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    version: APP_VERSION,
+    databaseType: process.env.DB_PROVIDER === "mysql" ? "MySQL" : "PostgreSQL",
+    uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000)
+  });
 });
 
 app.post("/api/auth/login", async (req, res) => {
@@ -220,7 +228,7 @@ app.get("/api/auth/me", authRequired, async (req, res) => {
   res.json({ user: sanitizeUser(user) });
 });
 
-app.get("/api/bootstrap", authRequired, async (_req, res) => {
+app.get("/api/bootstrap", authRequired, async (req, res) => {
     const store = await readStore();
     const activityLogs = await getActivityLogs(100);
     const topSellingProducts = await getTopSellingProducts(5);
@@ -235,8 +243,41 @@ app.get("/api/bootstrap", authRequired, async (_req, res) => {
         purchaseOrders: store.purchaseOrders,
         sales: store.sales,
         users: store.users.map(sanitizeUser),
-        activityLogs
+        activityLogs,
+        system: {
+          storeBuddyVersion: APP_VERSION,
+          frontendVersion: APP_VERSION,
+          backendVersion: APP_VERSION,
+          databaseType: process.env.DB_PROVIDER === "mysql" ? "MySQL" : "PostgreSQL",
+          databaseStatus: "Connected",
+          currentLoggedUser: req.auth.name,
+          currentUserRole: req.auth.role,
+          totalUsers: store.users.length,
+          totalProducts: store.products.length,
+          totalCategories: store.categories.length,
+          totalSuppliers: store.suppliers.length,
+          totalSales: store.sales.length,
+          lastBackupDate: store.meta.lastBackupAt,
+          applicationUptime: Math.floor((Date.now() - startedAt) / 1000)
+        }
     });
+});
+
+app.put("/api/settings", authRequired, allowRoles("admin"), async (req, res) => {
+  const meta = await updateMeta(req.body || {});
+  await logActivity({
+    userId: req.auth.userId,
+    action: "SETTINGS_UPDATED",
+    entity: "settings",
+    entityId: "app_meta",
+    description: `${req.auth.name} updated StoreBuddy settings.`
+  });
+  const store = await readStore();
+  res.json({
+    meta,
+    summary: summarize(store),
+    activityLogs: await getActivityLogs(100)
+  });
 });
 
 app.get("/api/dashboard", authRequired, async (_req, res) => {
@@ -547,10 +588,12 @@ app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req,
   const store = await readStore();
   const topSellingProducts = await getTopSellingProducts(5);
   res.status(201).json({
+    sale,
     sales: store.sales,
     products: store.products,
     summary: summarize(store),
-    topSellingProducts
+    topSellingProducts,
+    activityLogs: await getActivityLogs(100)
   });
 });
 
@@ -620,7 +663,14 @@ app.post("/api/backup/restore", authRequired, allowRoles("admin"), async (req, r
   const store = await restoreBackup(req.body);
   res.json({
     meta: store.meta,
-    summary: summarize(store)
+    summary: summarize(store),
+    products: store.products,
+    categories: store.categories,
+    suppliers: store.suppliers,
+    purchaseOrders: store.purchaseOrders,
+    sales: store.sales,
+    users: store.users.map(sanitizeUser),
+    activityLogs: await getActivityLogs(100)
   });
 });
 

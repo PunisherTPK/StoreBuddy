@@ -76,6 +76,25 @@ const modeThemes = [
   { id: "dark", label: "Dark mode" }
 ];
 
+const defaultSettings = {
+  appName: "StoreBuddy",
+  storeName: "StoreBuddy",
+  storeLogo: "",
+  businessAddress: "",
+  phoneNumber: "",
+  emailAddress: "",
+  currency: "LKR",
+  receiptFooter: "Thank you for shopping with us.",
+  printStoreLogo: true,
+  printStoreAddress: true,
+  printPhoneNumber: true,
+  printCashierName: true,
+  printDateTime: true,
+  printBarcode: true,
+  paperWidth: "80mm",
+  autoPrintAfterSale: false
+};
+
 function currency(value) {
   return new Intl.NumberFormat("en-LK", {
     style: "currency",
@@ -172,6 +191,10 @@ export default function App() {
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [posNotice, setPosNotice] = useState(null);
+  const [settingsForm, setSettingsForm] = useState(defaultSettings);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ method: "cash", amountReceived: "" });
+  const [receiptSale, setReceiptSale] = useState(null);
   const isPos = activeTab === "pos" && canAccessModule(user, "pos");
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [sortConfig, setSortConfig] = useState({
@@ -189,6 +212,7 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const stockChartRef = useRef(null);
   const [focusedProductId, setFocusedProductId] = useState("");
+  const branding = { ...defaultSettings, ...(boot?.meta || {}) };
 
   const roleTabs = useMemo(
     () => tabs.filter((tab) => (user ? canAccessModule(user, tab.id) : false)),
@@ -281,6 +305,7 @@ export default function App() {
       const me = await api("/api/auth/me", {}, currentToken);
       setBoot(data);
       setUser(me.user);
+      setSettingsForm({ ...defaultSettings, ...(data.meta || {}) });
       setActivityLogs(data.activityLogs ?? []);
       setError("");
       if (!canAccessModule(me.user, activeTab)) {
@@ -309,6 +334,12 @@ export default function App() {
       setActiveTab("dashboard");
     }
   }, [activeTab, user]);
+
+  useEffect(() => {
+    if (boot?.meta) {
+      setSettingsForm({ ...defaultSettings, ...boot.meta });
+    }
+  }, [boot?.meta]);
 
   useEffect(() => {
     document.documentElement.dataset.mode = themeMode;
@@ -647,11 +678,21 @@ async function deleteSupplier(supplier) {
     });
   }
 
-  async function createSale() {
+  function openPaymentDialog() {
     if (!cart.length) {
       return;
     }
+    setPaymentForm({ method: "cash", amountReceived: String(cart.reduce((sum, item) => sum + item.quantity * item.price, 0)) });
+    setPaymentDialogOpen(true);
+  }
 
+  async function createSale() {
+    const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const amountReceived = Number(paymentForm.amountReceived || 0);
+    if (paymentForm.method === "cash" && amountReceived < total) {
+      showPosNotice("Amount received cannot be less than total.", "error");
+      return;
+    }
     await runAction("create-sale", async () => {
       const response = await api(
         "/api/sales",
@@ -659,7 +700,7 @@ async function deleteSupplier(supplier) {
           method: "POST",
           body: JSON.stringify({
             items: cart.map((item) => ({ productId: item.id, quantity: item.quantity })),
-            paymentMethod: "cash"
+            paymentMethod: paymentForm.method
           })
         },
         token
@@ -670,11 +711,47 @@ async function deleteSupplier(supplier) {
         products: response.products,
         sales: response.sales,
         summary: response.summary,
-        topSellingProducts: response.topSellingProducts ?? syncTopSellingProducts(current.topSellingProducts, response.products)
+        topSellingProducts: response.topSellingProducts ?? syncTopSellingProducts(current.topSellingProducts, response.products),
+        activityLogs: response.activityLogs ?? current.activityLogs
       }));
-      setCart([]);
-      flash("Sale completed and stock updated.");
-      window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
+      setActivityLogs(response.activityLogs ?? []);
+      setPaymentDialogOpen(false);
+      setReceiptSale({
+        ...response.sale,
+        cashierName: user.name,
+        cashReceived: paymentForm.method === "cash" ? amountReceived : null,
+        balance: paymentForm.method === "cash" ? amountReceived - total : null
+      });
+      flash("Sale completed.");
+    });
+  }
+
+  function startNewSale() {
+    setReceiptSale(null);
+    setCart([]);
+    setGlobalSearch("");
+    window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
+  }
+
+  async function saveSettings(event) {
+    event.preventDefault();
+    await runAction("save-settings", async () => {
+      const response = await api(
+        "/api/settings",
+        {
+          method: "PUT",
+          body: JSON.stringify(settingsForm)
+        },
+        token
+      );
+      setBoot((current) => ({
+        ...current,
+        meta: response.meta,
+        summary: response.summary ?? current.summary,
+        activityLogs: response.activityLogs ?? current.activityLogs
+      }));
+      setActivityLogs(response.activityLogs ?? []);
+      flash("Settings saved.");
     });
   }
   async function deleteUser(user) {
@@ -753,6 +830,7 @@ async function deleteSupplier(supplier) {
     await runAction("export-backup", async () => {
       const dump = await api("/api/backup/export", {}, token);
       setBackupText(JSON.stringify(dump, null, 2));
+      setBoot((current) => ({ ...current, meta: dump.meta || current.meta }));
       flash("Backup exported.");
     });
   }
@@ -831,7 +909,7 @@ async function deleteSupplier(supplier) {
       return;
     }
 
-    addToCart(cart, setCart, matchedProduct);
+    addToCart(cart, setCart, matchedProduct, showPosNotice);
     playSuccessBeep();
     setGlobalSearch("");
     showPosNotice(`${matchedProduct.name} added to bill.`, "success");
@@ -876,6 +954,7 @@ async function deleteSupplier(supplier) {
             <TopBar
               activeTab={currentTab}
               accentTheme={accentTheme}
+              branding={branding}
               error={error}
               onAccentThemeChange={setAccentTheme}
               onLogout={logout}
@@ -974,7 +1053,7 @@ async function deleteSupplier(supplier) {
                 {protectedTab === "pos" ? (
                   <div className="h-full">
                     <PosTopBar
-                      logoSrc={storebuddyLogo}
+                      branding={branding}
                       onExit={() => setActiveTab("dashboard")}
                       user={user.name}
                     />
@@ -984,8 +1063,8 @@ async function deleteSupplier(supplier) {
                       cart={cart}
                       onAddToCart={(product) => addToCart(cart, setCart, product)}
                       onBarcodeSubmit={handlePosBarcodeSubmit}
-                      onCheckout={createSale}
-                      onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta)}
+                      onCheckout={openPaymentDialog}
+                      onQuantityChange={(productId, delta) => shiftCart(setCart, productId, delta, showPosNotice)}
                       posNotice={posNotice}
                       products={filteredProducts}
                       searchValue={globalSearch}
@@ -1017,12 +1096,18 @@ async function deleteSupplier(supplier) {
 
                 {protectedTab === "backup" ? (
                   <ScreenScrollArea>
-                    <BackupScreen
+                    <SettingsScreen
                       backupText={backupText}
                       busyKey={busyKey}
+                      form={settingsForm}
+                      onFormChange={setSettingsForm}
                       onBackupTextChange={setBackupText}
                       onExport={exportBackup}
                       onRestore={restoreBackup}
+                      onSave={saveSettings}
+                      system={boot.system}
+                      user={user}
+                      totals={boot}
                     />
                   </ScreenScrollArea>
                 ) : null}
@@ -1047,6 +1132,24 @@ async function deleteSupplier(supplier) {
             onSubmit={saveProduct}
         />
       </EntityModal>
+
+      <PaymentDialog
+        busy={busyKey === "create-sale"}
+        cart={cart}
+        form={paymentForm}
+        onCancel={() => setPaymentDialogOpen(false)}
+        onChange={setPaymentForm}
+        onContinue={createSale}
+        open={paymentDialogOpen}
+      />
+
+      <ReceiptDialog
+        branding={branding}
+        onClose={() => setReceiptSale(null)}
+        onNewSale={startNewSale}
+        onPrinted={() => flash("Receipt printed.")}
+        sale={receiptSale}
+      />
 
       <EntityModal
         open={supplierModalOpen}
@@ -1535,7 +1638,7 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
 function PosTopBar({
   user,
   onExit,
-  logoSrc
+  branding
 }) {
   const [time, setTime] = useState(new Date());
 
@@ -1558,8 +1661,8 @@ function PosTopBar({
       {/* Left */}
       <div className="flex items-center gap-4">
         <img
-          src={logoSrc}
-          alt="StoreBuddy"
+          src={branding.storeLogo || storebuddyLogo}
+          alt={branding.storeName}
           className="h-20 w-20 rounded-xl object-contain"
         />
 
@@ -1568,7 +1671,7 @@ function PosTopBar({
             className="text-xl font-bold"
             style={{ color: "var(--text-primary)" }}
           >
-            StoreBuddy POS
+            {branding.storeName} POS
           </h1>
 
           <p
@@ -1643,6 +1746,7 @@ function PosTopBar({
 function TopBar({
   accentTheme,
   activeTab,
+  branding,
   error,
   onAccentThemeChange,
   onLogout,
@@ -1664,8 +1768,14 @@ function TopBar({
           <button className="btn-secondary px-3 py-2 lg:hidden" onClick={onMenu} type="button">
             <MenuIcon />
           </button>
+          <img
+            src={branding.storeLogo || storebuddyLogo}
+            alt={branding.storeName}
+            className="hidden h-10 w-10 rounded-xl object-contain sm:block"
+          />
           <div>
             <h2 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-strong)" }}>{activeTab?.label}</h2>
+            <p className="text-sm" style={{ color: "var(--text-faint)" }}>{branding.storeName}</p>
             {/* <p className="text-sm" style={{ color: "var(--text-faint)" }}>Production-style retail workspace with unchanged business logic underneath.</p> */}
           </div>
         </div>
@@ -3014,15 +3124,21 @@ function PosScreen({
               <div className="grid gap-4 md:grid-cols-3 2xl:grid-cols-3">
                 {products.map((product) => (
 
-                  <button className="card rounded-2xl border border-slate-200 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md" key={product.id} onClick={() => onAddToCart(product)} type="button">
+                  <button
+                    className="card rounded-2xl border border-slate-200 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={Number(product.stock) <= 0}
+                    key={product.id}
+                    onClick={() => onAddToCart(product)}
+                    type="button"
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{product.name}</p>
                         <p className="text-xs text-slate-500">{product.barcode || product.sku || "No code"}</p>
                       </div>
 
-                      <StatusPill tone={Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
-                        {product.stock}
+                      <StatusPill tone={Number(product.stock) <= 0 ? "danger" : Number(product.stock) <= Number(product.reorderLevel) ? "warning" : "neutral"}>
+                        {Number(product.stock) <= 0 ? "Out of Stock" : product.stock}
                       </StatusPill>
                     </div>
 
@@ -3450,31 +3566,248 @@ function UsersScreen({ onEditUser, onNewUser, onSort, sortConfig, users, onDelet
   );
 }
 
-function BackupScreen({ backupText, busyKey, onBackupTextChange, onExport, onRestore }) {
+function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExport, onFormChange, onRestore, onSave, system, user, totals }) {
+  const update = (key, value) => onFormChange({ ...form, [key]: value });
+  const info = system || {};
+
   return (
-    <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <SectionCard subtitle="Keep manual backup and restore exactly as before, but with a cleaner operator workflow." title="Backup and Restore">
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            Export creates a JSON snapshot. Restore uses the text payload currently pasted into the editor.
-          </div>
-          <button className="btn-primary w-full" disabled={busyKey === "export-backup"} onClick={onExport} type="button">
-            {busyKey === "export-backup" ? "Exporting..." : "Export backup"}
-          </button>
-          <button className="btn-secondary w-full" disabled={busyKey === "restore-backup"} onClick={onRestore} type="button">
-            {busyKey === "restore-backup" ? "Restoring..." : "Restore from JSON"}
-          </button>
+    <form className="space-y-6" onSubmit={onSave}>
+      <SectionCard title="Store Information" subtitle="Branding used across dashboard, POS, reports, and receipts.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Store Logo">
+            <input className="input" placeholder="Image URL or data URL" value={form.storeLogo || ""} onChange={(event) => update("storeLogo", event.target.value)} />
+          </Field>
+          <Field label="Store Name">
+            <input className="input" value={form.storeName || ""} onChange={(event) => update("storeName", event.target.value)} />
+          </Field>
+          <Field label="Business Address">
+            <textarea className="input min-h-24" value={form.businessAddress || ""} onChange={(event) => update("businessAddress", event.target.value)} />
+          </Field>
+          <Field label="Receipt Footer Message">
+            <textarea className="input min-h-24" value={form.receiptFooter || ""} onChange={(event) => update("receiptFooter", event.target.value)} />
+          </Field>
+          <Field label="Phone Number">
+            <input className="input" value={form.phoneNumber || ""} onChange={(event) => update("phoneNumber", event.target.value)} />
+          </Field>
+          <Field label="Email Address">
+            <input className="input" type="email" value={form.emailAddress || ""} onChange={(event) => update("emailAddress", event.target.value)} />
+          </Field>
+          <Field label="Currency">
+            <select className="input" value={form.currency || "LKR"} onChange={(event) => update("currency", event.target.value)}>
+              <option value="LKR">LKR</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </Field>
         </div>
+        <button className="btn-primary mt-5" disabled={busyKey === "save-settings"} type="submit">
+          {busyKey === "save-settings" ? "Saving..." : "Save Changes"}
+        </button>
       </SectionCard>
 
-      <SectionCard subtitle="Paste or review the snapshot below." title="Backup Payload">
-        <textarea
-          className="input min-h-[520px] font-mono text-xs"
-          onChange={(event) => onBackupTextChange(event.target.value)}
-          value={backupText}
-        />
+      <SectionCard title="Receipt Settings" subtitle="Control what appears on printed customer receipts.">
+        <div className="grid gap-3 md:grid-cols-2">
+          {[
+            ["printStoreLogo", "Print Store Logo"],
+            ["printStoreAddress", "Print Store Address"],
+            ["printPhoneNumber", "Print Phone Number"],
+            ["printCashierName", "Print Cashier Name"],
+            ["printDateTime", "Print Date & Time"],
+            ["printBarcode", "Print Barcode"],
+            ["autoPrintAfterSale", "Auto Print After Sale"]
+          ].map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-soft)", background: "var(--surface-3)" }}>
+              <span className="text-sm font-medium" style={{ color: "var(--text-strong)" }}>{label}</span>
+              <input type="checkbox" checked={Boolean(form[key])} onChange={(event) => update(key, event.target.checked)} />
+            </label>
+          ))}
+          <Field label="Paper Width">
+            <select className="input" value={form.paperWidth || "80mm"} onChange={(event) => update("paperWidth", event.target.value)}>
+              <option value="58mm">58mm</option>
+              <option value="80mm">80mm</option>
+              <option value="A4">A4</option>
+            </select>
+          </Field>
+          <Field label="Receipt Footer Message">
+            <input className="input" value={form.receiptFooter || ""} onChange={(event) => update("receiptFooter", event.target.value)} />
+          </Field>
+        </div>
+        <button className="btn-primary mt-5" disabled={busyKey === "save-settings"} type="submit">
+          {busyKey === "save-settings" ? "Saving..." : "Save Changes"}
+        </button>
       </SectionCard>
-    </section>
+
+      <SectionCard title="System Information" subtitle="Read-only deployment and data status.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <MetricRow label="StoreBuddy Version" value={info.storeBuddyVersion || "1.0.0"} />
+          <MetricRow label="Frontend Version" value={info.frontendVersion || "1.0.0"} />
+          <MetricRow label="Backend Version" value={info.backendVersion || "1.0.0"} />
+          <MetricRow label="Database Type" value={info.databaseType || "Connected database"} />
+          <MetricRow label="Database Status" value={info.databaseStatus || "Connected"} />
+          <MetricRow label="Current Logged User" value={info.currentLoggedUser || user.name} />
+          <MetricRow label="Current User Role" value={(info.currentUserRole || user.role).replace("_", " ")} />
+          <MetricRow label="Total Users" value={info.totalUsers ?? totals.users?.length ?? 0} />
+          <MetricRow label="Total Products" value={info.totalProducts ?? totals.products?.length ?? 0} />
+          <MetricRow label="Total Categories" value={info.totalCategories ?? totals.categories?.length ?? 0} />
+          <MetricRow label="Total Suppliers" value={info.totalSuppliers ?? totals.suppliers?.length ?? 0} />
+          <MetricRow label="Total Sales" value={info.totalSales ?? totals.sales?.length ?? 0} />
+          <MetricRow label="Last Backup Date" value={info.lastBackupDate ? formatDateTime(info.lastBackupDate) : "Never"} />
+          <MetricRow label="Application Uptime" value={info.applicationUptime ? `${Math.floor(info.applicationUptime / 60)} min` : "Unavailable"} />
+        </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
+          <div className="space-y-3">
+            <button className="btn-primary w-full" disabled={busyKey === "export-backup"} onClick={onExport} type="button">
+              {busyKey === "export-backup" ? "Exporting..." : "Export backup"}
+            </button>
+            <button className="btn-secondary w-full" disabled={busyKey === "restore-backup"} onClick={onRestore} type="button">
+              {busyKey === "restore-backup" ? "Restoring..." : "Restore from JSON"}
+            </button>
+          </div>
+          <textarea
+            className="input min-h-[220px] font-mono text-xs"
+            onChange={(event) => onBackupTextChange(event.target.value)}
+            value={backupText}
+          />
+        </div>
+      </SectionCard>
+    </form>
+  );
+}
+
+function PaymentDialog({ busy, cart, form, onCancel, onChange, onContinue, open }) {
+  if (!open) {
+    return null;
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const amountReceived = Number(form.amountReceived || 0);
+  const balance = Math.max(0, amountReceived - total);
+  const cashInvalid = form.method === "cash" && amountReceived < total;
+
+  return (
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+      <div className="card w-full max-w-lg p-6">
+        <h3 className="text-2xl font-semibold" style={{ color: "var(--text-strong)" }}>Payment</h3>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Grand total: {currency(total)}</p>
+        <div className="mt-5 space-y-4">
+          <Field label="Payment Method">
+            <select className="input" value={form.method} onChange={(event) => onChange({ method: event.target.value, amountReceived: event.target.value === "cash" ? String(total) : "" })}>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="digital_wallet">Digital Wallet</option>
+            </select>
+          </Field>
+          {form.method === "cash" ? (
+            <>
+              <Field label="Amount Received">
+                <input className="input" min="0" type="number" value={form.amountReceived} onChange={(event) => onChange({ ...form, amountReceived: event.target.value })} />
+              </Field>
+              <MetricRow label="Balance" value={currency(balance)} />
+              {cashInvalid ? <Alert tone="error">Amount received cannot be less than total.</Alert> : null}
+            </>
+          ) : (
+            <MetricRow label="Payment Method" value={form.method === "card" ? "Card" : "Digital Wallet"} />
+          )}
+        </div>
+        <div className="mt-6 flex gap-3">
+          <button className="btn-secondary flex-1" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+          <button className="btn-primary flex-1" disabled={busy || cashInvalid} onClick={onContinue} type="button">
+            {busy ? "Completing..." : "Continue"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReceiptDialog({ branding, onClose, onNewSale, onPrinted, sale }) {
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    if (!sale || !branding.autoPrintAfterSale) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      window.print();
+      onPrinted?.();
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [branding.autoPrintAfterSale, onPrinted, sale]);
+
+  if (!sale) {
+    return null;
+  }
+
+  const printLogo = branding.printStoreLogo && (branding.storeLogo || storebuddyLogo);
+  const printReceipt = () => {
+    setPrinting(true);
+    window.setTimeout(() => {
+      window.print();
+      onPrinted?.();
+      setPrinting(false);
+    }, 80);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #receipt-preview, #receipt-preview * { visibility: visible; }
+          #receipt-preview { position: absolute; left: 0; top: 0; width: ${branding.paperWidth || "80mm"}; box-shadow: none !important; border: 0 !important; }
+          .receipt-actions { display: none !important; }
+        }
+      `}</style>
+      <div className="card max-h-[92vh] w-full max-w-md overflow-y-auto p-6">
+        <div id="receipt-preview" className="rounded-2xl bg-white p-5 text-slate-950">
+          <div className="text-center">
+            {printLogo ? <img className="mx-auto mb-2 h-16 w-16 object-contain" src={branding.storeLogo || storebuddyLogo} alt={branding.storeName} /> : null}
+            <h3 className="text-lg font-bold">{branding.storeName}</h3>
+            {branding.printStoreAddress && branding.businessAddress ? <p className="text-xs">{branding.businessAddress}</p> : null}
+            {branding.printPhoneNumber && branding.phoneNumber ? <p className="text-xs">Phone: {branding.phoneNumber}</p> : null}
+          </div>
+          <div className="my-4 border-t border-dashed border-slate-300" />
+          <div className="space-y-1 text-xs">
+            <p>Invoice: {sale.id}</p>
+            {branding.printDateTime ? <p>Date: {new Date(sale.createdAt).toLocaleString()}</p> : null}
+            {branding.printCashierName ? <p>Cashier: {sale.cashierName || sale.cashierId}</p> : null}
+            <p>Payment: {String(sale.paymentMethod || "").replace("_", " ")}</p>
+          </div>
+          <div className="my-4 border-t border-dashed border-slate-300" />
+          <div className="space-y-2 text-xs">
+            {(sale.items || []).map((item) => (
+              <div key={`${sale.id}-${item.productId}`}>
+                <div className="flex justify-between gap-2 font-medium">
+                  <span>{item.name}</span>
+                  <span>{currency(item.price * item.quantity)}</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>{item.quantity} x {currency(item.price)}</span>
+                  {branding.printBarcode ? <span>{item.productId}</span> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="my-4 border-t border-dashed border-slate-300" />
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between"><span>Subtotal</span><span>{currency(sale.subtotal)}</span></div>
+            <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>{currency(sale.total)}</span></div>
+            {sale.paymentMethod === "cash" ? (
+              <>
+                <div className="flex justify-between"><span>Cash Received</span><span>{currency(sale.cashReceived)}</span></div>
+                <div className="flex justify-between"><span>Balance</span><span>{currency(sale.balance)}</span></div>
+              </>
+            ) : null}
+          </div>
+          {branding.receiptFooter ? <p className="mt-5 text-center text-xs">{branding.receiptFooter}</p> : null}
+        </div>
+        <div className="receipt-actions mt-5 grid gap-3 sm:grid-cols-3">
+          <button className="btn-primary" disabled={printing} onClick={printReceipt} type="button">{printing ? "Printing..." : "Print Receipt"}</button>
+          <button className="btn-secondary" onClick={onNewSale} type="button">New Sale</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -4048,9 +4381,17 @@ function groupSalesByDay(sales) {
   }, {});
 }
 
-function addToCart(cart, setCart, product) {
+function addToCart(cart, setCart, product, onBlocked) {
+  if (Number(product.stock) <= 0) {
+    onBlocked?.("This product is currently out of stock.", "error");
+    return;
+  }
   const existing = cart.find((item) => item.id === product.id);
   if (existing) {
+    if (Number(existing.quantity) >= Number(product.stock)) {
+      onBlocked?.("Insufficient stock available.", "error");
+      return;
+    }
     setCart(
       cart.map((item) =>
         item.id === product.id ? { ...item, quantity: Math.min(item.quantity + 1, product.stock) } : item
@@ -4061,10 +4402,20 @@ function addToCart(cart, setCart, product) {
   setCart([...cart, { ...product, quantity: 1 }]);
 }
 
-function shiftCart(setCart, productId, delta) {
+function shiftCart(setCart, productId, delta, onBlocked) {
   setCart((current) =>
     current
-      .map((item) => (item.id === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
+      .map((item) => {
+        if (item.id !== productId) {
+          return item;
+        }
+        const nextQuantity = item.quantity + delta;
+        if (delta > 0 && nextQuantity > Number(item.stock)) {
+          onBlocked?.("Insufficient stock available.", "error");
+          return item;
+        }
+        return { ...item, quantity: Math.max(0, nextQuantity) };
+      })
       .filter((item) => item.quantity > 0)
   );
 }

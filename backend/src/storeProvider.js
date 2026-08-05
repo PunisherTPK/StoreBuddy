@@ -47,3 +47,4 @@ export const exportBackup = store.exportBackup;
 export const restoreBackup = store.restoreBackup;
 export const logActivity = store.logActivity;
 export const getActivityLogs = store.getActivityLogs;
+export const updateMeta = store.updateMeta;

@@ -35,7 +35,21 @@ function clone(value) {
 function defaultMeta() {
   return {
     appName: "StoreBuddy",
+    storeName: "StoreBuddy",
+    storeLogo: "",
+    businessAddress: "",
+    phoneNumber: "",
+    emailAddress: "",
     currency: "LKR",
+    receiptFooter: "Thank you for shopping with us.",
+    printStoreLogo: true,
+    printStoreAddress: true,
+    printPhoneNumber: true,
+    printCashierName: true,
+    printDateTime: true,
+    printBarcode: true,
+    paperWidth: "80mm",
+    autoPrintAfterSale: false,
     lastBackupAt: null,
     lastRestoredAt: null
   };
@@ -189,10 +203,8 @@ async function tableHasRows(connection, tableName) {
 
 async function seedMeta(connection, meta) {
   const entries = Object.entries({
-    appName: meta.appName,
-    currency: meta.currency,
-    lastBackupAt: meta.lastBackupAt,
-    lastRestoredAt: meta.lastRestoredAt
+    ...defaultMeta(),
+    ...meta
   });
 
   for (const [key, value] of entries) {
@@ -366,7 +378,12 @@ async function readMeta(connection) {
   const meta = defaultMeta();
 
   for (const row of rows) {
-    meta[row.meta_key] = row.meta_value;
+    const value = row.meta_value;
+    if (["printStoreLogo", "printStoreAddress", "printPhoneNumber", "printCashierName", "printDateTime", "printBarcode", "autoPrintAfterSale"].includes(row.meta_key)) {
+      meta[row.meta_key] = value === "true" || value === true;
+    } else {
+      meta[row.meta_key] = value;
+    }
   }
 
   return meta;
@@ -1655,4 +1672,27 @@ export async function restoreBackup(backup) {
   } finally {
     connection.release();
   }
+}
+
+export async function updateMeta(changes) {
+  await ensureStore();
+  const allowed = new Set(Object.keys(defaultMeta()));
+  const currentStore = await readStore();
+  const nextMeta = { ...currentStore.meta };
+
+  for (const [key, value] of Object.entries(changes || {})) {
+    if (allowed.has(key)) {
+      nextMeta[key] = value;
+    }
+  }
+
+  const connection = await pool.connect();
+
+  try {
+    await seedMeta(connection, nextMeta);
+  } finally {
+    connection.release();
+  }
+
+  return nextMeta;
 }
