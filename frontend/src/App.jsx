@@ -34,18 +34,27 @@ ChartJS.register(
 );
 
 import MonthlyReport from "./components/MonthlyReport";
+import {
+  canAccessModule,
+  canAccessReport,
+  canViewFinancials,
+  canViewProfit,
+  canViewRevenue,
+  hasPermission,
+  PERMISSIONS
+} from "./permissions";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const tabs = [
-  { id: "dashboard", label: "Dashboard", roles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
-  { id: "inventory", label: "Inventory", roles: ["admin", "stock_handler"], icon: BoxIcon },
-  { id: "suppliers", label: "Suppliers", roles: ["admin", "stock_handler"], icon: TruckIcon },
-  { id: "orders", label: "Purchase Orders", roles: ["admin", "stock_handler"], icon: ClipboardIcon },
-  { id: "reports", label: "Reports", roles: ["admin", "cashier", "stock_handler"], icon: ChartIcon },
-  { id: "users", label: "Users", roles: ["admin"], icon: UsersIcon },
-  { id: "backup", label: "Backup", roles: ["admin"], icon: ShieldIcon },
-  { id: "pos", label: "POS", roles: ["admin", "cashier"], icon: CartIcon/*,color: "#c7eb25", fontSize: "1.875rem"*/ }
+  { id: "dashboard", label: "Dashboard", requiredRoles: ["admin", "cashier", "stock_handler"], icon: HomeIcon },
+  { id: "inventory", label: "Products", requiredRoles: ["admin", "stock_handler"], icon: BoxIcon },
+  { id: "suppliers", label: "Suppliers", requiredRoles: ["admin", "stock_handler"], icon: TruckIcon },
+  { id: "orders", label: "Purchase Orders", requiredRoles: ["admin", "stock_handler"], icon: ClipboardIcon },
+  { id: "reports", label: "Reports", requiredRoles: ["admin", "stock_handler"], icon: ChartIcon },
+  { id: "users", label: "Users", requiredRoles: ["admin"], icon: UsersIcon },
+  { id: "backup", label: "Settings", requiredRoles: ["admin"], icon: ShieldIcon },
+  { id: "pos", label: "POS", requiredRoles: ["admin", "cashier"], icon: CartIcon/*,color: "#c7eb25", fontSize: "1.875rem"*/ }
 ];
 
 const demoAccounts = [
@@ -163,7 +172,7 @@ export default function App() {
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [posNotice, setPosNotice] = useState(null);
-  const isPos = activeTab === "pos";
+  const isPos = activeTab === "pos" && canAccessModule(user, "pos");
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     products: { key: "name", direction: "asc" },
@@ -182,13 +191,14 @@ export default function App() {
   const [focusedProductId, setFocusedProductId] = useState("");
 
   const roleTabs = useMemo(
-    () => tabs.filter((tab) => (user ? tab.roles.includes(user.role) : false)),
+    () => tabs.filter((tab) => (user ? canAccessModule(user, tab.id) : false)),
     [user]
   );
 
-  const currentTab = roleTabs.find((tab) => tab.id === activeTab) || roleTabs[0];
+  const protectedTab = user && canAccessModule(user, activeTab) ? activeTab : "dashboard";
+  const currentTab = roleTabs.find((tab) => tab.id === protectedTab) || roleTabs[0];
   const searchQuery = globalSearch.trim().toLowerCase();
-  const searchConfig = getSearchConfig(activeTab);
+  const searchConfig = getSearchConfig(protectedTab);
 
   const filteredProducts = useMemo(() => {
     const products = boot?.products || [];
@@ -273,7 +283,7 @@ export default function App() {
       setUser(me.user);
       setActivityLogs(data.activityLogs ?? []);
       setError("");
-      if (!tabs.find((tab) => tab.id === activeTab && tab.roles.includes(me.user.role))) {
+      if (!canAccessModule(me.user, activeTab)) {
         setActiveTab("dashboard");
       }
     } catch (loadError) {
@@ -293,6 +303,12 @@ export default function App() {
       loadBootstrap(token);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (user && !canAccessModule(user, activeTab)) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, user]);
 
   useEffect(() => {
     document.documentElement.dataset.mode = themeMode;
@@ -838,12 +854,14 @@ async function deleteSupplier(supplier) {
       <div className="flex h-screen overflow-hidden">
         {!isPos && (
           <Sidebar
-            activeTab={activeTab}
+            activeTab={protectedTab}
             collapsed={sidebarCollapsed}
             onLogout={logout}
             onClose={() => setSidebarOpen(false)}
             onSelect={(tabId) => {
-              setActiveTab(tabId);
+              if (canAccessModule(user, tabId)) {
+                setActiveTab(tabId);
+              }
               setSidebarOpen(false);
             }}
             onToggleCollapsed={() => setSidebarCollapsed((current) => !current)}
@@ -879,23 +897,26 @@ async function deleteSupplier(supplier) {
               {loading ? <LoadingBanner label="Refreshing dashboard data..." /> : null}
 
               <div className="min-h-0 flex-1 overflow-hidden">
-                {activeTab === "dashboard" ? (
+                {protectedTab === "dashboard" ? (
                   <ScreenScrollArea>
                     <DashboardScreen 
                     summary={boot.summary} 
                     products={boot.products} 
                     sales={recentSales} 
                     categories={boot.categories} 
+                    purchaseOrders={boot.purchaseOrders}
                     activityLogs={activityLogs}
                     topSellingProducts={boot.topSellingProducts ?? []}
                     onProductSelect={openProductInInventory}
                     stockChartData={boot.stockChartData}
                     stockChartRef={stockChartRef}
-                    categoryChartData={boot.categoryChartData} />
+                    categoryChartData={boot.categoryChartData}
+                    user={user}
+                    />
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "inventory" ? (
+                {protectedTab === "inventory" ? (
                   <ScreenScrollArea>
                     <InventoryScreen
                       busy={busyKey}
@@ -920,7 +941,7 @@ async function deleteSupplier(supplier) {
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "suppliers" ? (
+                {protectedTab === "suppliers" ? (
                   <ScreenScrollArea>
                     <SuppliersScreen
                       onEditSupplier={openEditSupplierModal}
@@ -935,7 +956,7 @@ async function deleteSupplier(supplier) {
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "orders" ? (
+                {protectedTab === "orders" ? (
                   <ScreenScrollArea>
                     <OrdersScreen
                       busyKey={busyKey}
@@ -950,7 +971,7 @@ async function deleteSupplier(supplier) {
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "pos" ? (
+                {protectedTab === "pos" ? (
                   <div className="h-full">
                     <PosTopBar
                       logoSrc={storebuddyLogo}
@@ -974,13 +995,13 @@ async function deleteSupplier(supplier) {
                   </div>
                 ) : null}
 
-                {activeTab === "reports" ? (
+                {protectedTab === "reports" ? (
                   <ScreenScrollArea>
-                    <ReportsScreen boot={boot} />
+                    <ReportsScreen boot={boot} onRefresh={() => loadBootstrap(token)} user={user} />
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "users" ? (
+                {protectedTab === "users" ? (
                   <ScreenScrollArea>
                     <UsersScreen
                       onEditUser={openEditUserModal}
@@ -994,7 +1015,7 @@ async function deleteSupplier(supplier) {
                   </ScreenScrollArea>
                 ) : null}
 
-                {activeTab === "backup" ? (
+                {protectedTab === "backup" ? (
                   <ScreenScrollArea>
                     <BackupScreen
                       backupText={backupText}
@@ -1472,6 +1493,9 @@ function Sidebar({ activeTab, collapsed, onClose, onSelect, onToggleCollapsed, o
 
             {(() => {
               const posTab = tabs.find((tab) => tab.id === "pos");
+              if (!posTab) {
+                return null;
+              }
               const Icon = posTab.icon;
               const posActive = activeTab === "pos";
               return (
@@ -1714,13 +1738,30 @@ const chartColors = [
     "#4ADE80"  // Light Green
 ];
 
-function DashboardScreen({ products, sales, summary,categories,activityLogs,stockChartRef, topSellingProducts, onProductSelect }) {
+function DashboardScreen({ products, sales, summary,categories,purchaseOrders,activityLogs,stockChartRef, topSellingProducts, onProductSelect, user }) {
   const cards = [
-    { label: "Today's revenue", value: currency(summary.todayRevenue),icon: Wallet, accent: "text-blue-600" },
-    { label: "Today's profit", value: currency(summary.todayProfit),icon: TrendingUp, accent: "text-emerald-600" },
-    { label: "Sales today", value: summary.todaySalesCount, icon: ShoppingCart, accent: "text-slate-900" },
-    { label: "Products", value: summary.productCount, icon: Package, accent: "text-slate-900" },
-    { label: "Suppliers", value: summary.supplierCount,  icon: Truck, accent: "text-slate-600" },
+    { label: "Today's revenue", value: currency(summary.todayRevenue), icon: Wallet, accent: "text-blue-600", visible: canViewRevenue(user) },
+    { label: "Today's profit", value: currency(summary.todayProfit), icon: TrendingUp, accent: "text-emerald-600", visible: canViewProfit(user) },
+    { label: "Sales today", value: summary.todaySalesCount, icon: ShoppingCart, accent: "text-slate-900", visible: canViewRevenue(user) },
+    { label: "Products", value: summary.productCount, icon: Package, accent: "text-slate-900", visible: true },
+    { label: "Categories", value: categories?.length || 0, icon: Package, accent: "text-slate-900", visible: hasPermission(user, PERMISSIONS.VIEW_CATEGORIES) },
+    { label: "Suppliers", value: summary.supplierCount, icon: Truck, accent: "text-slate-600", visible: hasPermission(user, PERMISSIONS.VIEW_SUPPLIERS) },
+    { label: "Purchase Orders", value: purchaseOrders?.length || 0, icon: ClipboardIcon, accent: "text-slate-600", visible: hasPermission(user, PERMISSIONS.VIEW_PURCHASE_ORDERS) },
+    { label: "Low stock", value: summary.lowStockCount, icon: Truck, accent: "text-orange-500", visible: !hasPermission(user, PERMISSIONS.VIEW_PURCHASE_ORDERS) }
+  ].filter((card) => card.visible);
+
+  const inventoryColumns = [
+    { key: "name", label: "Product" },
+    { key: "stock", label: "Stock" },
+    ...(hasPermission(user, PERMISSIONS.VIEW_COST_PRICES)
+      ? [
+          {
+            key: "value",
+            label: "Value",
+            render: (row) => currency(Number(row.stock) * Number(row.costPrice || 0))
+          }
+        ]
+      : [])
   ];
 
   const categoryCounts = (categories ?? [])
@@ -2144,35 +2185,27 @@ function DashboardScreen({ products, sales, summary,categories,activityLogs,stoc
       </div>
 
 
-      <div className="grid gap-6 xl:grid-cols-1">
-        
+      {canViewRevenue(user) ? (
+        <div className="grid gap-6 xl:grid-cols-1">
+          <SectionCard title="Recent sales" subtitle="Most recent completed transactions.">
+            <DataTable
+              columns={[
+                { key: "createdAt", label: "Time", render: (row) => formatDateTime(row.createdAt) },
+                {key: "cashier", label: "Cashier", render: (row) => row.cashier?.name || "N/A"},
+                { key: "id", label: "Sale" },
+                { key: "items", label: "Items", render: (row) => row.items.reduce((sum, item) => sum + item.quantity, 0) },
+                { key: "total", label: "Total", render: (row) => currency(row.total) },
 
-        <SectionCard title="Recent sales" subtitle="Most recent completed transactions.">
-          <DataTable
-            columns={[
-              { key: "createdAt", label: "Time", render: (row) => formatDateTime(row.createdAt) },
-              {key: "cashier", label: "Cashier", render: (row) => row.cashier?.name || "N/A"},
-              { key: "id", label: "Sale" },
-              { key: "items", label: "Items", render: (row) => row.items.reduce((sum, item) => sum + item.quantity, 0) },
-              { key: "total", label: "Total", render: (row) => currency(row.total) },
+              ]}
+              rows={sales}
+            />
+          </SectionCard>
+        </div>
+      ) : null}
 
-            ]}
-            rows={sales}
-          />
-        </SectionCard>
-      </div>
-
-      <SectionCard title="Inventory snapshot" subtitle="Readable overview of current stock and current stock value.">
+      <SectionCard title="Inventory snapshot" subtitle="Readable overview of current stock.">
         <DataTable
-          columns={[
-            { key: "name", label: "Product" },
-            { key: "stock", label: "Stock" },
-            {
-              key: "value",
-              label: "Value",
-              render: (row) => currency(Number(row.stock) * Number(row.costPrice || 0))
-            }
-          ]}
+          columns={inventoryColumns}
           rows={products}
         />
       </SectionCard>
@@ -3095,7 +3128,7 @@ function PosScreen({
 }
 
 
-function ReportsScreen({ boot }) {
+function ReportsScreen({ boot, onRefresh, user }) {
   const [reportView, setReportView] = useState("overview");
   const data = summarizeLocal(boot).summary;
   const groupedSales = Object.entries(groupSalesByDay(boot.sales));
@@ -3103,10 +3136,29 @@ function ReportsScreen({ boot }) {
   const reportTabs = [
     { id: "overview", label: "Overview" },
     { id: "sales", label: "Sales Summary" },
-    { id: "profit", label: "Profit & Loss" },
     { id: "stock", label: "Stock Report" },
-    { id: "monthly", label: "Monthly" }
-  ];
+    { id: "inventory", label: "Inventory Report" },
+    { id: "suppliers", label: "Supplier Report" },
+    { id: "purchases", label: "Purchase Order Report" },
+    { id: "monthly", label: "Monthly Business Report" }
+  ].filter((tab) => canAccessReport(user, tab.id));
+
+  useEffect(() => {
+    if (!reportTabs.some((tab) => tab.id === reportView)) {
+      setReportView(reportTabs[0]?.id || "stock");
+    }
+  }, [reportTabs, reportView]);
+
+  const lowStockProducts = boot.products.filter((product) => Number(product.stock) <= Number(product.reorderLevel));
+  const purchaseOrderRows = boot.purchaseOrders.map((order) => {
+    const supplier = boot.suppliers.find((entry) => entry.id === order.supplierId);
+    const totalQty = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    return {
+      ...order,
+      supplierName: supplier?.name || "Unknown supplier",
+      totalQty
+    };
+  });
 
   return (
     <section className="space-y-6">
@@ -3128,7 +3180,7 @@ function ReportsScreen({ boot }) {
         ))}
       </div>
 
-      {reportView === "overview" ? <OverviewReport data={data} sales={boot.sales} /> : null}
+      {reportView === "overview" ? <OverviewReport data={data} sales={boot.sales} user={user} /> : null}
 
       {reportView === "sales" ? (
         <div className="space-y-6">
@@ -3170,32 +3222,80 @@ function ReportsScreen({ boot }) {
         </div>
       ) : null}
 
-      {reportView === "profit" ? (
-        <SectionCard subtitle="Built next." title="Profit & Loss">
-          <EmptyState description="This report is being built next." title="Coming soon" />
-        </SectionCard>
-      ) : null}
 
       {reportView === "stock" ? (
-        <SectionCard subtitle="Built next." title="Stock Report">
-          <EmptyState description="This report is being built next." title="Coming soon" />
+        <SectionCard subtitle="Products at or below reorder level." title="Low Stock Report">
+          <DataTable
+            columns={[
+              { key: "name", label: "Product" },
+              { key: "stock", label: "Stock" },
+              { key: "reorderLevel", label: "Reorder Level" },
+              { key: "unit", label: "Unit" }
+            ]}
+            rows={lowStockProducts}
+          />
         </SectionCard>
       ) : null}
 
-      {reportView === "monthly" ? <MonthlyReport boot={boot} onRefresh={() => loadBootstrap(token)} /> : null}
+      {reportView === "inventory" ? (
+        <SectionCard subtitle="Current product availability by category." title="Inventory Report">
+          <DataTable
+            columns={[
+              { key: "name", label: "Product" },
+              { key: "category", label: "Category", render: (row) => boot.categories.find((category) => category.id === row.categoryId)?.name || "-" },
+              { key: "stock", label: "Stock" },
+              { key: "reorderLevel", label: "Reorder Level" },
+              { key: "status", label: "Status", render: (row) => (Number(row.stock) === 0 ? "Out of stock" : Number(row.stock) <= Number(row.reorderLevel) ? "Low stock" : "Healthy") }
+            ]}
+            rows={boot.products}
+          />
+        </SectionCard>
+      ) : null}
+
+      {reportView === "suppliers" ? (
+        <SectionCard subtitle="Supplier directory and assigned product counts." title="Supplier Report">
+          <DataTable
+            columns={[
+              { key: "name", label: "Supplier" },
+              { key: "contactPerson", label: "Contact" },
+              { key: "phone", label: "Phone" },
+              { key: "email", label: "Email" },
+              { key: "products", label: "Products", render: (row) => boot.products.filter((product) => product.supplierId === row.id).length }
+            ]}
+            rows={boot.suppliers}
+          />
+        </SectionCard>
+      ) : null}
+
+      {reportView === "purchases" ? (
+        <SectionCard subtitle="Purchase order status and item quantities." title="Purchase Order Report">
+          <DataTable
+            columns={[
+              { key: "id", label: "PO ID" },
+              { key: "supplierName", label: "Supplier" },
+              { key: "createdAt", label: "Created", render: (row) => formatDateTime(row.createdAt) },
+              { key: "status", label: "Status" },
+              { key: "totalQty", label: "Total Qty" }
+            ]}
+            rows={purchaseOrderRows}
+          />
+        </SectionCard>
+      ) : null}
+
+      {reportView === "monthly" ? <MonthlyReport boot={boot} onRefresh={onRefresh} user={user} /> : null}
     </section>
   );
 }
 
-function OverviewReport({ data, sales }) {
+function OverviewReport({ data, sales, user }) {
   const cards = [
-    { label: "Today's Revenue", value: currency(data.todayRevenue), icon: Wallet, accent: "text-blue-600" },
-    { label: "Today's Profit", value: currency(data.todayProfit), icon: TrendingUp, accent: "text-emerald-600" },
-    { label: "Total Revenue", value: currency(data.totalRevenue), icon: ShoppingCart, accent: "text-slate-900" },
-    { label: "Total Profit", value: currency(data.totalProfit), icon: TrendingUp, accent: "text-emerald-600" },
-    { label: "Stock Value", value: currency(data.stockValue), icon: Package, accent: "text-slate-900" },
-    { label: "Low Stock Items", value: data.lowStockCount, icon: Truck, accent: "text-orange-500" }
-  ];
+    { label: "Today's Revenue", value: currency(data.todayRevenue), icon: Wallet, accent: "text-blue-600", visible: canViewRevenue(user) },
+    { label: "Today's Profit", value: currency(data.todayProfit), icon: TrendingUp, accent: "text-emerald-600", visible: canViewProfit(user) },
+    { label: "Total Revenue", value: currency(data.totalRevenue), icon: ShoppingCart, accent: "text-slate-900", visible: canViewFinancials(user) },
+    { label: "Total Profit", value: currency(data.totalProfit), icon: TrendingUp, accent: "text-emerald-600", visible: canViewProfit(user) },
+    { label: "Stock Value", value: currency(data.stockValue), icon: Package, accent: "text-slate-900", visible: canViewFinancials(user) },
+    { label: "Low Stock Items", value: data.lowStockCount, icon: Truck, accent: "text-orange-500", visible: true }
+  ].filter((card) => card.visible);
 
   const dailyEntries = Object.entries(groupSalesByDay(sales))
     .sort(([a], [b]) => a.localeCompare(b))
