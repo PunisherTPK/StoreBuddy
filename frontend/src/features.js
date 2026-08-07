@@ -1,3 +1,3 @@
 export const FEATURES = {
-  discounts: true
+  discounts: false
 };
