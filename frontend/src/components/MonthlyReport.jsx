@@ -762,7 +762,7 @@ export default function MonthlyReport({ boot, onRefresh }) {
           </select>
           <button className="btn-secondary px-3 py-2" type="button" onClick={() => goToMonth(1)}>Next ›</button>
           {onRefresh ? <button className="btn-secondary px-3 py-2" type="button" onClick={onRefresh}>Refresh</button> : null}
-          <button className="btn-secondary px-3 py-2" type="button" onClick={() => window.print()}>Print</button>
+          {/* <button className="btn-secondary px-3 py-2" type="button" onClick={() => window.print()}>Print</button> */}
           <button
             className="btn-primary px-3 py-2"
             type="button"

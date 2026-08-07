@@ -3773,6 +3773,7 @@ function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExpor
           <MetricRow label="Last Backup Date" value={info.lastBackupDate ? formatDateTime(info.lastBackupDate) : "Never"} />
           <MetricRow label="Application Uptime" value={info.applicationUptime ? `${Math.floor(info.applicationUptime / 60)} min` : "Unavailable"} />
         </div>
+        {/*
         <div className="mt-6 grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
           <div className="space-y-3">
             <button className="btn-primary w-full" disabled={busyKey === "export-backup"} onClick={onExport} type="button">
@@ -3788,6 +3789,7 @@ function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExpor
             value={backupText}
           />
         </div>
+        */}
       </SectionCard>
     </form>
   );
