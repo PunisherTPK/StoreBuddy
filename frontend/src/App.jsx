@@ -36,6 +36,7 @@ ChartJS.register(
 );
 
 import MonthlyReport from "./components/MonthlyReport";
+import { FEATURES } from "./features";
 import {
   canAccessModule,
   canAccessReport,
@@ -103,6 +104,83 @@ function currency(value) {
     currency: "LKR",
     maximumFractionDigits: 2
   }).format(Number(value || 0));
+}
+
+function calculateDiscount(subtotal, discountType, discountValue) {
+  const subtotalAmount = Number(subtotal || 0);
+  const normalizedValue = Number(discountValue || 0);
+
+  if (!FEATURES.discounts) {
+    return {
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0,
+      total: subtotalAmount
+    };
+  }
+
+  if (!discountType || normalizedValue === 0) {
+    return {
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0,
+      total: subtotalAmount
+    };
+  }
+
+  if (normalizedValue < 0) {
+    return {
+      discountType,
+      discountValue: normalizedValue,
+      discountAmount: 0,
+      total: subtotalAmount,
+      error: "Discount cannot be negative."
+    };
+  }
+
+  const normalizedType = discountType === "fixed" ? "fixed" : "percentage";
+  let discountAmount = 0;
+
+  if (normalizedType === "fixed") {
+    if (normalizedValue > subtotalAmount) {
+      return {
+        discountType: normalizedType,
+        discountValue: normalizedValue,
+        discountAmount: 0,
+        total: subtotalAmount,
+        error: "Discount cannot exceed subtotal."
+      };
+    }
+    discountAmount = normalizedValue;
+  } else {
+    if (normalizedValue > 100) {
+      return {
+        discountType: normalizedType,
+        discountValue: normalizedValue,
+        discountAmount: 0,
+        total: subtotalAmount,
+        error: "Percentage discount cannot exceed 100%."
+      };
+    }
+    discountAmount = subtotalAmount * (normalizedValue / 100);
+  }
+
+  if (discountAmount > subtotalAmount) {
+    return {
+      discountType: normalizedType,
+      discountValue: normalizedValue,
+      discountAmount: 0,
+      total: subtotalAmount,
+      error: "Discount cannot exceed subtotal."
+    };
+  }
+
+  return {
+    discountType: normalizedType,
+    discountValue: normalizedValue,
+    discountAmount,
+    total: subtotalAmount - discountAmount
+  };
 }
 
 async function api(path, options = {}, token) {
@@ -196,6 +274,7 @@ export default function App() {
   const [settingsForm, setSettingsForm] = useState(defaultSettings);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ method: "cash", amountReceived: "" });
+  const [discountForm, setDiscountForm] = useState({ type: "percentage", value: "" });
   const [receiptSale, setReceiptSale] = useState(null);
   const [logoUploadBusy, setLogoUploadBusy] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState("");
@@ -761,14 +840,22 @@ async function deleteSupplier(supplier) {
     if (!cart.length) {
       return;
     }
-    setPaymentForm({ method: "cash", amountReceived: String(cart.reduce((sum, item) => sum + item.quantity * item.price, 0)) });
+    const subtotal = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const discount = calculateDiscount(subtotal, discountForm.type, discountForm.value);
+    setPaymentForm({ method: "cash", amountReceived: String(discount.total) });
     setPaymentDialogOpen(true);
   }
 
   async function createSale() {
-    const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const subtotal = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const discount = calculateDiscount(subtotal, discountForm.type, discountForm.value);
+    const grandTotal = discount.total;
     const amountReceived = Number(paymentForm.amountReceived || 0);
-    if (paymentForm.method === "cash" && amountReceived < total) {
+    if (discount.error) {
+      showPosNotice(discount.error, "error");
+      return;
+    }
+    if (paymentForm.method === "cash" && amountReceived < grandTotal) {
       showPosNotice("Amount received cannot be less than total.", "error");
       return;
     }
@@ -779,7 +866,9 @@ async function deleteSupplier(supplier) {
           method: "POST",
           body: JSON.stringify({
             items: cart.map((item) => ({ productId: item.id, quantity: item.quantity })),
-            paymentMethod: paymentForm.method
+            paymentMethod: paymentForm.method,
+            discountType: FEATURES.discounts ? discountForm.type : null,
+            discountValue: FEATURES.discounts ? discountForm.value : 0
           })
         },
         token
@@ -799,7 +888,7 @@ async function deleteSupplier(supplier) {
         ...response.sale,
         cashierName: user.name,
         cashReceived: paymentForm.method === "cash" ? amountReceived : null,
-        balance: paymentForm.method === "cash" ? amountReceived - total : null
+        balance: paymentForm.method === "cash" ? amountReceived - grandTotal : null
       });
       flash("Sale completed.");
     });
@@ -809,6 +898,7 @@ async function deleteSupplier(supplier) {
     setReceiptSale(null);
     setCart([]);
     setPaymentForm({ method: "cash", amountReceived: "" });
+    setDiscountForm({ type: "percentage", value: "" });
     setGlobalSearch("");
     window.setTimeout(() => barcodeInputRef.current?.focus(), 40);
   }
@@ -1220,9 +1310,11 @@ async function deleteSupplier(supplier) {
       <PaymentDialog
         busy={busyKey === "create-sale"}
         cart={cart}
+        discountForm={discountForm}
         form={paymentForm}
         onCancel={() => setPaymentDialogOpen(false)}
         onChange={setPaymentForm}
+        onDiscountChange={setDiscountForm}
         onContinue={createSale}
         open={paymentDialogOpen}
       />
@@ -3795,22 +3887,53 @@ function SettingsScreen({ backupText, busyKey, form, onBackupTextChange, onExpor
   );
 }
 
-function PaymentDialog({ busy, cart, form, onCancel, onChange, onContinue, open }) {
+function PaymentDialog({ busy, cart, discountForm, form, onCancel, onChange, onContinue, onDiscountChange, open }) {
   if (!open) {
     return null;
   }
 
-  const total = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const discount = calculateDiscount(subtotal, discountForm?.type, discountForm?.value);
+  const total = discount.total;
   const amountReceived = Number(form.amountReceived || 0);
   const balance = Math.max(0, amountReceived - total);
   const cashInvalid = form.method === "cash" && amountReceived < total;
+  const discountInvalid = Boolean(discount.error);
 
   return (
     <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
       <div className="card w-full max-w-lg p-6">
         <h3 className="text-2xl font-semibold" style={{ color: "var(--text-strong)" }}>Payment</h3>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Subtotal: {currency(subtotal)}</p>
         <p className="mt-1 text-sm" style={{ color: "var(--text-faint)" }}>Grand total: {currency(total)}</p>
         <div className="mt-5 space-y-4">
+          {FEATURES.discounts ? (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <Field label="Discount Type">
+                <select
+                  className="input"
+                  value={discountForm?.type || "percentage"}
+                  onChange={(event) => onDiscountChange?.({ ...(discountForm || {}), type: event.target.value, value: discountForm?.value ?? "" })}
+                >
+                  <option value="percentage">Percentage</option>
+                  <option value="fixed">Fixed Amount</option>
+                </select>
+              </Field>
+              <Field label="Discount Value">
+                <input
+                  className="input"
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  value={discountForm?.value ?? ""}
+                  onChange={(event) => onDiscountChange?.({ ...(discountForm || {}), value: event.target.value })}
+                />
+              </Field>
+              <MetricRow label="Discount Amount" value={currency(discount.discountAmount)} />
+              <MetricRow label="Updated Grand Total" value={currency(discount.total)} />
+              {discount.error ? <Alert tone="error">{discount.error}</Alert> : null}
+            </div>
+          ) : null}
           <Field label="Payment Method">
             <select className="input" value={form.method} onChange={(event) => onChange({ method: event.target.value, amountReceived: event.target.value === "cash" ? String(total) : "" })}>
               <option value="cash">Cash</option>
@@ -3832,7 +3955,7 @@ function PaymentDialog({ busy, cart, form, onCancel, onChange, onContinue, open 
         </div>
         <div className="mt-6 flex gap-3">
           <button className="btn-secondary flex-1" disabled={busy} onClick={onCancel} type="button">Cancel</button>
-          <button className="btn-primary flex-1" disabled={busy || cashInvalid} onClick={onContinue} type="button">
+          <button className="btn-primary flex-1" disabled={busy || cashInvalid || discountInvalid} onClick={onContinue} type="button">
             {busy ? "Completing..." : "Continue"}
           </button>
         </div>

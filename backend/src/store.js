@@ -23,8 +23,86 @@ const pool = mysql.createPool({
 
 let initialized = false;
 
+const FEATURES = {
+  discounts: false
+};
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function computeDiscount(subtotal, discountType, discountValue) {
+  const subtotalAmount = toNumber(subtotal);
+  const normalizedValue = toNumber(discountValue);
+
+  if (!FEATURES.discounts) {
+    return {
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0,
+      total: subtotalAmount
+    };
+  }
+
+  if (!discountType || normalizedValue === 0) {
+    return {
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0,
+      total: subtotalAmount
+    };
+  }
+
+  if (normalizedValue < 0) {
+    throw new Error("Discount cannot be negative.");
+  }
+
+  const normalizedType = discountType === "fixed" ? "fixed" : "percentage";
+  let discountAmount = 0;
+
+  if (normalizedType === "fixed") {
+    if (normalizedValue > subtotalAmount) {
+      throw new Error("Discount cannot exceed subtotal.");
+    }
+    discountAmount = normalizedValue;
+  } else {
+    if (normalizedValue > 100) {
+      throw new Error("Percentage discount cannot exceed 100%.");
+    }
+    discountAmount = subtotalAmount * (normalizedValue / 100);
+  }
+
+  if (discountAmount > subtotalAmount) {
+    throw new Error("Discount cannot exceed subtotal.");
+  }
+
+  return {
+    discountType: normalizedType,
+    discountValue: normalizedValue,
+    discountAmount,
+    total: subtotalAmount - discountAmount
+  };
+}
+
+function serializeSaleDiscount(sale) {
+  if (!FEATURES.discounts) {
+    return {
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0
+    };
+  }
+
+  return {
+    discountType: sale?.discountType || null,
+    discountValue: toNumber(sale?.discountValue || 0),
+    discountAmount: toNumber(sale?.discountAmount || 0)
+  };
 }
 
 function defaultMeta() {
@@ -183,6 +261,9 @@ async function createSchemaTables(connection) {
       CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products(id)
     )
   `);
+  if (FEATURES.discounts) {
+    await ensureSaleDiscountColumns(connection);
+  }
   await connection.query(`
     CREATE TABLE IF NOT EXISTS activity_logs (
       id VARCHAR(40) PRIMARY KEY,
@@ -208,6 +289,21 @@ async function createMetaTable(connection) {
       meta_value TEXT NULL
     )
   `);
+}
+
+async function ensureSaleDiscountColumns(connection) {
+  for (const [columnName, definition] of [
+    ["discount_type", "VARCHAR(20) NULL"],
+    ["discount_value", "DECIMAL(10, 2) NOT NULL DEFAULT 0"],
+    ["discount_amount", "DECIMAL(10, 2) NOT NULL DEFAULT 0"]
+  ]) {
+    const [columns] = await connection.query(`SHOW COLUMNS FROM sales LIKE ?`, [columnName]);
+    if (columns.length) {
+      continue;
+    }
+
+    await connection.query(`ALTER TABLE sales ADD COLUMN ${columnName} ${definition}`);
+  }
 }
 
 async function tableHasRows(connection, tableName) {
@@ -341,20 +437,44 @@ async function replaceStore(connection, store) {
     }
 
     for (const sale of normalized.sales) {
-      await connection.query(
-        `
-          INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        [
-          sale.id,
-          sale.cashierId,
-          toMysqlDate(sale.createdAt),
-          Number(sale.subtotal || 0),
-          Number(sale.total || 0),
-          sale.paymentMethod || "cash"
-        ]
-      );
+      const discount = FEATURES.discounts
+        ? computeDiscount(Number(sale.subtotal || 0), sale.discountType, sale.discountValue)
+        : { discountType: null, discountValue: 0, discountAmount: 0, total: Number(sale.total || sale.subtotal || 0) };
+
+      if (FEATURES.discounts) {
+        await connection.query(
+          `
+            INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method, discount_type, discount_value, discount_amount)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            sale.id,
+            sale.cashierId,
+            toMysqlDate(sale.createdAt),
+            Number(sale.subtotal || 0),
+            Number(sale.total || discount.total),
+            sale.paymentMethod || "cash",
+            discount.discountType,
+            discount.discountValue,
+            discount.discountAmount
+          ]
+        );
+      } else {
+        await connection.query(
+          `
+            INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            sale.id,
+            sale.cashierId,
+            toMysqlDate(sale.createdAt),
+            Number(sale.subtotal || 0),
+            Number(sale.total || 0),
+            sale.paymentMethod || "cash"
+          ]
+        );
+      }
 
       for (const item of sale.items || []) {
         await connection.query(
@@ -551,6 +671,7 @@ export async function readStore() {
         s.subtotal,
         s.total,
         s.payment_method AS paymentMethod,
+        ${FEATURES.discounts ? "s.discount_type AS discountType, s.discount_value AS discountValue, s.discount_amount AS discountAmount," : ""}
         si.product_id AS productId,
         si.quantity,
         si.price,
@@ -630,6 +751,9 @@ function collapseSales(rows) {
         subtotal: Number(row.subtotal || 0),
         total: Number(row.total || 0),
         paymentMethod: row.paymentMethod,
+        discountType: FEATURES.discounts ? row.discountType || null : null,
+        discountValue: FEATURES.discounts ? Number(row.discountValue || 0) : 0,
+        discountAmount: FEATURES.discounts ? Number(row.discountAmount || 0) : 0,
         items: []
       });
     }
@@ -1445,6 +1569,7 @@ export async function getSales() {
         s.subtotal,
         s.total,
         s.payment_method AS paymentMethod,
+        ${FEATURES.discounts ? "s.discount_type AS discountType, s.discount_value AS discountValue, s.discount_amount AS discountAmount," : ""}
         si.product_id AS productId,
         si.quantity,
         si.price,
@@ -1499,7 +1624,7 @@ export async function getTopSellingProducts(limit = 5) {
   }
 }
 
-export async function createSale({ id, cashierId, paymentMethod, items }) {
+export async function createSale({ id, cashierId, paymentMethod, items, discountType, discountValue }) {
   await ensureStore();
 
   const connection = await pool.getConnection();
@@ -1542,15 +1667,27 @@ export async function createSale({ id, cashierId, paymentMethod, items }) {
     }
 
     const subtotal = saleItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const discount = computeDiscount(subtotal, discountType, discountValue);
+    const total = discount.total;
     const createdAt = new Date();
 
-    await connection.query(
-      `
-      INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [id, cashierId, toMysqlDate(createdAt), subtotal, subtotal, paymentMethod || "cash"]
-    );
+    if (FEATURES.discounts) {
+      await connection.query(
+        `
+        INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method, discount_type, discount_value, discount_amount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [id, cashierId, toMysqlDate(createdAt), subtotal, total, paymentMethod || "cash", discount.discountType, discount.discountValue, discount.discountAmount]
+      );
+    } else {
+      await connection.query(
+        `
+        INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [id, cashierId, toMysqlDate(createdAt), subtotal, subtotal, paymentMethod || "cash"]
+      );
+    }
 
     for (const item of saleItems) {
       await connection.query(
@@ -1574,8 +1711,11 @@ export async function createSale({ id, cashierId, paymentMethod, items }) {
       createdAt: toIso(createdAt),
       items: saleItems,
       subtotal,
-      total: subtotal,
-      paymentMethod: paymentMethod || "cash"
+      total,
+      paymentMethod: paymentMethod || "cash",
+      discountType: discount.discountType,
+      discountValue: discount.discountValue,
+      discountAmount: discount.discountAmount
     };
   } catch (error) {
     await connection.rollback();
@@ -1721,20 +1861,44 @@ export async function restoreBackup(backup) {
     }
 
     for (const sale of next.sales) {
-      await connection.query(
-        `
-          INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        [
-          sale.id,
-          sale.cashierId,
-          toMysqlDate(sale.createdAt),
-          Number(sale.subtotal || 0),
-          Number(sale.total || 0),
-          sale.paymentMethod || "cash"
-        ]
-      );
+      const discount = FEATURES.discounts
+        ? computeDiscount(Number(sale.subtotal || 0), sale.discountType, sale.discountValue)
+        : { discountType: null, discountValue: 0, discountAmount: 0, total: Number(sale.total || sale.subtotal || 0) };
+
+      if (FEATURES.discounts) {
+        await connection.query(
+          `
+            INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method, discount_type, discount_value, discount_amount)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            sale.id,
+            sale.cashierId,
+            toMysqlDate(sale.createdAt),
+            Number(sale.subtotal || 0),
+            Number(sale.total || discount.total),
+            sale.paymentMethod || "cash",
+            discount.discountType,
+            discount.discountValue,
+            discount.discountAmount
+          ]
+        );
+      } else {
+        await connection.query(
+          `
+            INSERT INTO sales (id, cashier_id, created_at, subtotal, total, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            sale.id,
+            sale.cashierId,
+            toMysqlDate(sale.createdAt),
+            Number(sale.subtotal || 0),
+            Number(sale.total || 0),
+            sale.paymentMethod || "cash"
+          ]
+        );
+      }
 
       for (const item of sale.items || []) {
         await connection.query(

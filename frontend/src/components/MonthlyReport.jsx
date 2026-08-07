@@ -13,6 +13,7 @@ import {
   Filler
 } from "chart.js";
 import { Bar, Line, Pie } from "react-chartjs-2";
+import { FEATURES } from "../features";
 
 ChartJS.register(
   ArcElement,
@@ -538,7 +539,8 @@ export default function MonthlyReport({ boot, onRefresh }) {
         ...sale,
         cashierName: userMap.get(sale.cashierId)?.name || "Unknown",
         itemCount: (sale.items || []).reduce((sum, i) => sum + Number(i.quantity || 0), 0),
-        profit: Number(sale.total || 0) - cost
+        profit: Number(sale.total || 0) - cost,
+        discountAmount: FEATURES.discounts ? Number(sale.discountAmount || 0) : 0
       };
     });
     return sortRows(rows, salesSort);
@@ -770,8 +772,8 @@ export default function MonthlyReport({ boot, onRefresh }) {
               downloadCsv(
                 `sales-${year}-${String(month + 1).padStart(2, "0")}.csv`,
                 [
-                  ["Invoice", "Date", "Cashier", "Items", "Subtotal", "Total", "Profit", "Payment Method"],
-                  ...salesRows.map((s) => [s.id, formatDateTime(s.createdAt), s.cashierName, s.itemCount, s.subtotal, s.total, s.profit.toFixed(2), s.paymentMethod])
+                  ["Invoice", "Date", "Cashier", "Items", "Subtotal", "Discount", "Total", "Profit", "Payment Method"],
+                  ...salesRows.map((s) => [s.id, formatDateTime(s.createdAt), s.cashierName, s.itemCount, s.subtotal, FEATURES.discounts ? s.discountAmount : 0, s.total, s.profit.toFixed(2), s.paymentMethod])
                 ]
               )
             }
@@ -849,6 +851,8 @@ export default function MonthlyReport({ boot, onRefresh }) {
               { key: "createdAt", label: "Date", sortable: true, render: (row) => formatDateTime(row.createdAt) },
               { key: "cashierName", label: "Cashier", sortable: true },
               { key: "itemCount", label: "Items", sortable: true },
+              { key: "subtotal", label: "Subtotal", sortable: true, render: (row) => currency(row.subtotal) },
+              ...(FEATURES.discounts ? [{ key: "discountAmount", label: "Discount", sortable: true, render: (row) => currency(row.discountAmount) }] : []),
               { key: "total", label: "Total", sortable: true, render: (row) => currency(row.total) },
               { key: "profit", label: "Profit", sortable: true, render: (row) => currency(row.profit) },
               { key: "paymentMethod", label: "Payment", sortable: true }

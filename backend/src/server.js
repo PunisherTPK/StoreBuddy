@@ -625,7 +625,9 @@ app.post("/api/sales", authRequired, allowRoles("admin", "cashier"), async (req,
       id: generateId("sale"),
       cashierId: req.auth.userId,
       items: payloadItems,
-      paymentMethod: req.body.paymentMethod || "cash"
+      paymentMethod: req.body.paymentMethod || "cash",
+      discountType: req.body.discountType,
+      discountValue: req.body.discountValue
     });
   } catch (error) {
     res.status(400).json({ message: error.message });

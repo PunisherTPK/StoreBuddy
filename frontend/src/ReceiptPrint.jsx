@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { FEATURES } from "./features";
 
 const ReceiptPrint = forwardRef(({ branding, sale }, ref) => {
   const subtotal = Number(
@@ -8,6 +9,7 @@ const ReceiptPrint = forwardRef(({ branding, sale }, ref) => {
         0
       )
   );
+  const discountAmount = FEATURES.discounts ? Number(sale?.discountAmount || 0) : 0;
   const total = Number(sale.total ?? subtotal);
   const cashReceived = Number(sale.cashReceived ?? 0);
   const balance = Number(sale.balance ?? (cashReceived - total));
@@ -106,6 +108,7 @@ const ReceiptPrint = forwardRef(({ branding, sale }, ref) => {
 
       <div style={{ fontSize: "10px", color: "#111111" }}>
         <ReceiptRow label="Subtotal" value={formatCurrency(subtotal)} />
+        {FEATURES.discounts && discountAmount > 0 ? <ReceiptRow label="Discount" value={formatCurrency(discountAmount)} /> : null}
         <ReceiptRow label="Grand Total" value={formatCurrency(total)} bold />
         {String(sale.paymentMethod || "").toLowerCase() === "cash" ? (
           <>
